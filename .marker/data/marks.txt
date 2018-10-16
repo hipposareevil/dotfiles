@@ -1,0 +1,13 @@
+git commit --all -m "##commit
+~/weather/getweather.sh##weather
+ssh web@willprogramforfood.com -p 66##wpff
+git show --pretty="format:" --name-only | cat##gitfiles
+perl -le 'print scalar localtime $ARGV[0]' ##epoch
+git rebase -i HEAD~##rebase
+git rebase --ignore-date##rebase.date
+du -h . |egrep '^[0-9]+.*M[[:space:]].*$'##duM
+ipconfig getifaddr en1##getip
+cat README.md | docker run -i hipposareevil/github-markdown-toc##readme
+d run -it -v `pwd`/builddir:/builddir oraclelinux:7.2 sh -c 'rpm -qpil /builddir/RPM/*.rpm'##rpm.query
+d run -it -v `pwd`:/scratch --workdir /scratch rpmbuilder bash##rpmbuilder
+bash <(docker run iad.ocir.io/odx-oke/oke/infra:latest)##infra

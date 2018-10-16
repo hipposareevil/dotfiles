@@ -1,0 +1,7 @@
+alias ll='ls -lhp'
+alias la='ls -lAhp'
+alias lr='ls -lrthp'
+alias rm="~/bin/junkIt"
+export rm="~/bin/junkIt"
+
+

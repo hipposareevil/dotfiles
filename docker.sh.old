@@ -1,0 +1,93 @@
+function d.start() {
+    unproxy; eval $(docker-machine env default)
+}
+
+function d.restart() {
+    docker-machine stop default; sudo /Library/Application\ Support/VirtualBox/LaunchDaemons/VirtualBoxStartup.sh restart; docker-machine restart default
+}
+
+function d.create.images() {
+    echo "---- Create wpff.apache ----"
+    d build -t wpff.apache /work/docker/apache
+
+    echo "---- Create wpff.git ----"
+    d build -t wpff.git /work/docker/git
+
+    echo "---- Create wpff.nginx ----"
+    d build -t wpff.nginx /work/docker/nginx   
+}
+
+function d.init() {
+    d network create wpff.bridge
+    d volume create --name vol.mysql.sara
+    d.create.images
+}
+
+######## Sara mysql
+
+function d.create.sara.mysql() {
+    echo "--- create data container"
+    d run -d -v vol.mysql.sara:/var/lib/mysql --name data_mysql_sara mysql:5.7 echo 'data'
+    echo "--- create mysql container"
+    d run -d --net=wpff.bridge -v vol.mysql.sara:/var/lib/mysql --name wpff_mysql_sara -e MYSQL_ROOT_PASSWORD=spiffy -e MYSQL_DATABASE=sara -e MYSQL_USER=sara_user -e MYSQL_PASSWORD=kermantle_sara  mysql:5.7
+    echo "--- sleep"
+    sleep 15
+    echo "--- load"
+    d exec -i wpff_mysql_sara mysql -uroot -pspiffy sara < /work/docker/mysql/sara.sql
+}
+
+function d.backup.sara.mysql() {
+    d run -i --net=wpff.bridge -v vol.mysql.sara:/var/lib/mysql mysql:5.7 mysqldump -hwpff_mysql_sara -uroot -pspiffy sara > /work/docker/sara.sql    
+}
+
+
+######## Sara apache
+
+function d.create.sara.apache() {
+    echo "--- Sara Apache ---"
+    echo "--- create container"
+    d run -v /var/web_root/sara:/var/www/html/sara --net=wpff.bridge -d --name wpff_apache_sara wpff.apache    
+}
+
+function d.start.sara.apache() {
+    echo "--- create container"
+    d run -v /var/web_root/sara/:/var/www/html/sara/ --net=wpff.bridge -d --name wpff_apache_sara wpff.apache
+}
+
+function d.refresh.sara.apache() {
+    d run -it -v /var/sara:/var/www/html  wpff.git sh -c 'cd /var/www/html/sara; git pull; chown -R www-data:www-data /var/www/html/sara'
+}
+
+
+######## Photos
+
+function d.create.photos() {
+    echo "--- Photos Apache ---"
+    d run -v /var/web_root/photos/:/var/www/html/photos --net=wpff.bridge -d --name wpff_apache_photos wpff.apache
+}
+
+
+######### Blog
+
+
+function d.create.blog() {
+    echo "--- Blog Apache ---"
+    d run -v /var/web_root/blog:/var/www/html/blog --net=wpff.bridge -d --name wpff_apache_blog wpff.apache
+}
+
+
+######### Web
+
+function d.create.web() {
+    echo "--- Web Apache ---"
+    d run -v /var/web_root/html:/var/www/html --net=wpff.bridge -d --name wpff_apache_web wpff.apache
+}
+
+
+########## Nginx
+
+function d.create.nginx() {
+    echo "--- Nginx on 80 --"
+    d run --name wpff_front_nginx -d --net wpff.bridge -P 80:80 wpff.nginx
+}
+

@@ -1,0 +1,1 @@
+oa signup tenant OVAB "my super customer" sam.jackson@oracle.com --password /Users/sami/Dropbox/work/nimbula/passwords/userpwd

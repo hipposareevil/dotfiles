@@ -1,0 +1,6 @@
+# root directory where we are located, inside dropbox
+my_dir=$(dirname $0)
+
+export MARKER_DATA_HOME=$my_dir/data/
+export MARKER_HOME="$my_dir"
+source ${MARKER_HOME}/bin/marker.sh

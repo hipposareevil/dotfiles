@@ -1,0 +1,1 @@
+d service create --name proxy --mount type=bind,source=/home/nimbula/html/,target=/usr/share/nginx/html/cadet --publish 8998:80 tahoma-1.us.oracle.com:5000/core.fileserver:17.2.3

@@ -1,0 +1,1 @@
+oa add user /OVAB/sam sam.jackson sam.jackson@oracle.com --password ~/Dropbox/work/nimbula/passwords/userpwd

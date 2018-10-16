@@ -1,0 +1,1 @@
+oc list orchestration /OVAB/public/dev-vm -f json

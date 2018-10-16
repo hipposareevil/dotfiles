@@ -1,0 +1,306 @@
+#!/bin/sh
+#
+# Sam Jackson
+# adapted from .....
+
+################
+# functions
+
+# Error message
+error()
+{
+  echo
+  echo Dear $USER, the usage of junk is as follows:
+  echo   junk -p means "purge the junk"
+  echo   junk -l means "list junked files"
+  echo   junk -i means "interactively junk my files"
+  echo   junk -r means "junk 'em all, directories too"
+  echo   junk -u means "undelete the file to current directory"
+  echo   junk "<list of files>" to junk files
+  echo
+}
+
+# undelete
+undelete()
+{
+ junkDir=$1
+
+  #get rid of the flags
+  shift;
+  files=$@
+
+# echo UNDELETE
+#  echo junkDir: $junkDir
+#  echo files: $files
+
+  for arg in $files
+  do
+    if [ -r $junkDir/$arg -o -h $junkDir/$arg ]
+    then
+      echo \"$arg\" undeleted!
+      'gmv' $junkDir/$arg $PWD
+    fi
+  done
+}
+
+
+# Delete interactively
+deleteInteractive()
+{
+  recurse=$1
+  junkDir=$2
+
+  # get rid of the flags
+  shift; shift;
+  files=$@
+
+#  echo recurse: $recurse
+#  echo junkDir: $junkDir
+#  echo files: $files
+
+  for arg in $files
+  do
+    if [ -r "$arg" -o -h "$arg" ]
+    then
+      if [ "$recurse" -eq "1" ]
+        then
+        echo "$arg: ? (y/n) \c";
+        read response    
+        if [ "$response" = "y" ]
+        then
+       'gmv' -f --backup=t $arg $junkDir
+        fi
+      else
+        if ! [ -d $arg ]
+        then
+          echo "$arg: ? (y/n) \c";
+          read response
+          if [ "$response" = "y" ]
+          then
+         'gmv' -f --backup=t $arg $junkDir
+          fi
+          else
+            echo "$arg": a directory
+        fi
+      fi
+    else
+       echo "junkIt: $arg non-existent"
+    fi
+  done
+}
+
+
+# Delete recursively
+deleteRecurse()
+{
+  junkDir=$1
+
+  #get rid of the flags
+  shift;
+  files=$@
+  filesThatExist=""
+
+  for arg in $files
+  do
+    if [ -r "$arg" ]
+    then
+      filesThatExist="$filesThatExist $arg"
+      fileToDelete=$junkDir/$arg
+      if [ -r $fileToDelete ]
+      then
+#     echo removing $fileToDelete
+       'rm' -rf $fileToDelete
+      fi
+    else
+      echo "junkIt: $arg non-existent"
+    fi
+  done
+
+  'gmv' -fv --backup=t $filesThatExist $junkDir
+}
+
+
+# Delete non-recursively
+# Only deletes files in this directory
+# if the $arg is a directory, we don't delete it
+deleteNoRecurse()
+{
+  junkDir=$1
+  shift
+  files=$@
+
+#  echo junk: $junkDir
+#  echo files: $files
+
+  for arg in $files
+  do
+    if ! [ -d $arg ]
+    then
+      if [ -f $arg -o -h $arg ]
+      then
+        'gmv' -f --backup=t $arg $junkDir
+      else
+        echo "junkIt: $arg non-existent"
+      fi
+    fi
+  done
+}
+
+
+#####################
+# variables
+
+fileList=0
+listFlag=0
+purgeFlag=0
+fileFlag=0
+recurseFlag=0
+forceFlag=0
+interactiveFlag=0
+unJunkFlag=0
+flagCount=0
+junk=~/.recycle
+
+#####################
+# start work
+
+if [ $# -eq 0 ]
+then
+ error
+fi
+
+for arg in $@
+do
+  case $arg in
+    "-p")
+#echo purg
+     purgeFlag=1
+     flagCount=`expr $flagCount + 1`
+        ;;
+
+    "-l")
+#echo list
+     listFlag=1
+     flagCount=`expr $flagCount + 1`
+        ;;
+
+    "-i")
+#echo inter
+     interactiveFlag=1
+     flagCount=`expr $flagCount + 1`
+     ;;
+
+    "-f")
+#echo force
+        forceFlag=1
+     flagCount=`expr $flagCount + 1`
+     ;;
+
+    "-ir" | "-ri" | "-Ri" | "-iR")
+#echo iririr
+     recurseFlag=1
+     interactiveFlag=1
+     flagCount=`expr $flagCount + 1`
+     ;;
+
+    "-r" | "-rf" | "-fr" | "-fR" | "-Rf")
+#echo rf fr
+     recurseFlag=1
+     flagCount=`expr $flagCount + 1`
+     ;;
+
+    "-u")
+#echo un
+     unJunkFlag=1
+     flagCount=`expr $flagCount + 1`
+     ;;
+
+    -*)
+        echo $arg is an illegal option
+     error
+     break
+     ;;
+   
+    *)
+     fileFlag=1
+     ;;
+   esac
+done
+
+
+shift $flagCount
+fileList=$@
+
+
+# list
+if [ "$listFlag" -eq "1" ]
+then
+  'ls' -lgF $junk
+  exit 0
+fi
+
+
+# force
+if [ "$forceFlag" -eq "1" ]
+then
+  interactiveFlag=0
+fi
+
+
+# purge
+if [ "$purgeFlag" -eq "1" ]
+then
+  dirList=`ls $junk`
+
+  for listing in $dirList
+  do
+     'rm' -rf $junk/$listing
+  done
+fi
+
+# undelete
+if [ "$unJunkFlag" -eq "1" ]
+then
+  undelete $junk $fileList
+  exit 0
+fi
+
+
+
+########
+#   mv
+
+# delete interactively
+if [ "$interactiveFlag" -eq "1" ]
+then
+  if [ "$recurseFlag" -eq "1" ]
+  then
+echo "interactive 1"
+    deleteInteractive 1 $junk $fileList
+  else
+echo "interactive 0"
+    deleteInteractive 0 $junk $fileList
+  fi
+  exit 0
+fi
+
+
+# recurse move
+if [ "$recurseFlag" -eq "1" ]
+then
+#  echo JUNK = $junk
+#  echo files = $fileList
+  deleteRecurse $junk $fileList
+  exit 0
+fi
+
+# put this last
+# delete non recurse
+if [ "$fileFlag" -eq "1" ]
+then
+  deleteNoRecurse $junk $fileList
+  exit 0
+fi
+
+
+exit 0
