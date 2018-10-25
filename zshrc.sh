@@ -27,6 +27,9 @@ alias emacs=~/Dropbox/dotfiles/bin/emacs
 alias t=tmux
 
 
+function diff {
+     colordiff -u "$@" | less -RF
+}
 
 ### ZSH
 #ZSH_THEME="kolo"
