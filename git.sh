@@ -1,5 +1,6 @@
 alias g.fetch="git fetch origin"
 alias g.pull="git pull"
+alias g.master="git checkout master"
 
 alias g.log="git shortlog --summary --numbered"
 

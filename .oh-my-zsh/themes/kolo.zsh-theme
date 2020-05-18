@@ -245,7 +245,7 @@ parse_tunnel() {
 setopt prompt_subst
 
 #PROMPT='${ret_status} %{$fg[cyan]%}%c%{$reset_color%} $(prompt_kubecontext) $(parse_git_state)'
-PROMPT='$(parse_weather)%{$fg[blue]%}$(parse_docker_env)$(parse_tunnel)$(parse_branch)%{$fg[white]%}%c%{$reset_color%}$(parse_git_state)$(parse_proxy)> '
+PROMPT='$(parse_weather)%{$fg[blue]%}$(parse_docker_env)$(parse_branch)%{$fg[white]%}%c%{$reset_color%}$(parse_git_state)$(parse_proxy)$(prompt_kubecontext)> '
 
 #PREVPROMPT='$(parse_weather)%B%F{green}$(parse_docker_env)$(parse_tunnel)$(parse_branch)%B%F{white}%2c%{$reset_color%} $(parse_git_state)$(parse_proxy)> '
 

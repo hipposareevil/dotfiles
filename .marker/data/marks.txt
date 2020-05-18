@@ -11,3 +11,5 @@ cat README.md | docker run -i hipposareevil/github-markdown-toc##readme
 d run -it -v `pwd`/builddir:/builddir oraclelinux:7.2 sh -c 'rpm -qpil /builddir/RPM/*.rpm'##rpm.query
 d run -it -v `pwd`:/scratch --workdir /scratch rpmbuilder bash##rpmbuilder
 bash <(docker run iad.ocir.io/odx-oke/oke/infra:latest)##infra
+docker run --entrypoint /bin/sh --rm -v "${HOME}"/.oci/oci_api_key.pem:/Users/sjackson/.oci/oci_api_key.pem -v "${HOME}"/.oci:/root/.oci -it iad.ocir.io/odx-oke/oke/oci-cli:preview##oci
+ssh-add -s /usr/lib/ssh-keychain.dylib##yubi

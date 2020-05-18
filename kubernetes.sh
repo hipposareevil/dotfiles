@@ -1,20 +1,70 @@
-alias k=kubectl
-alias ko="kubectl -n ns-user-oke"
-alias ks="kubectl -n ns-user-sj"
+CONTAINER_NAME="ep-api"
+# Log
+log () {
+    >&2 echo ">> $1"
+    >&2 echo ""
+}
 
-# Get pods for a tkc id
-k.get.pods () {
+# Find anything and describe it
+kd () {
+    local resource_type resource_name
+    resource_type="$(kubectl api-resources --output=name | fzf)" 
+    resource_name="$(kubectl get "${resource_type}" --output='jsonpath={.items[*].metadata.name}' | tr -s '[[:space:]]' '\n' | fzf)" 
+    kubectl describe "${resource_type}" "${resource_name}"
+}
+
+# Get secrets
+k.sec () {
+    local secret_name secret_field
+    secret_name="$(kubectl get secret --output=name | fzf)" 
+    secret_field="$(kubectl get "${secret_name}" --output=go-template --template='{{range $k, $v := .data}}{{$k}} {{end}}' | tr -s '[[:space:]]' '\n' | fzf)" 
+    kubectl get "${secret_name}" --output="jsonpath={.data.${secret_field}}" | base64 --decode
+}
+
+
+# Get pods on a node
+k.get.pods.for.node () {
     if [ -z "$1" ]
     then
-        echo "Must supply tkc id to test"
+        echo "Must supply node name to test"
         return 1
     fi
 
-    echo ">> ko get po -l tkc_id=$1"
-    ko get po -l tkc_id=$1
+    node=$1
+
+    echo "Getting pods for node '${node}'"
+    log ">>k get pods -o wide  --all-namespaces | grep $node"
+
+    pods=$(kubectl get pods -o wide  --all-namespaces | grep $node)
+
+    echo "${pods}"
 }
 
-# Get containers for a pod
+# Get all worker nodes
+k.get.worker.nodes () {
+    log "k get nodes -l kops.k8s.io/instancegroup=nodes"
+    nodes=$(kubectl get nodes -l kops.k8s.io/instancegroup=nodes)
+
+    echo "${nodes}"
+}
+
+# Get all master nodes
+k.get.master.nodes () {
+    log "k get nodes -l kops.k8s.io/instancegroup!=nodes"
+    nodes=$(kubectl get nodes -l kops.k8s.io/instancegroup!=nodes)
+
+    echo "${nodes}"
+}
+
+
+# Get all pods 
+k.get.pods () {
+    log "k get pods -o wide"
+    pods=$(kubectl get pods -o wide)
+    echo "${pods}"
+}
+
+# list containers for a pod
 k.get.containers () {
     if [ -z "$1" ]
     then
@@ -22,12 +72,125 @@ k.get.containers () {
         return 1
     fi
 
-    echo ">> ko get pods "$1" -o jsonpath='{.spec.containers[*].name}' | xargs"
+    log "k get pods \"$1\" -o jsonpath='{.spec.containers[*].name}' | xargs"
+    k get pods "$1" -o jsonpath='{.spec.containers[*].name}' | xargs
+}
+
+# list all deployments
+k.get.all.deployments () {
+    log "k get deployments --all-namespaces"
+    k get deployments --all-namespaces
+}
+
+# list deployments
+k.get.deployments () {
+    k get deployments
+}
+
+# list services
+k.get.services () {
+    k get services
+}
+
+# Exec /bin/sh into the pod
+k.proxy() {
+    if [ -z "$1" ]
+    then
+        echo "Must supply pod to test"
+        return 1
+    fi
+
+    local pod=$1
+
+    log ">>ka exec -it $pod_pods -c ${CONTAINER_NAME} -- /bin/sh"
+    k exec -it "$pod" -c ${CONTAINER_NAME} -- /bin/sh
+}
+
+
+
+#########################################################
+# OLD
+#########################################################
+
+# Get pods for a tkc id
+kk.get.tkc.pods () {
+    if [ -z "$1" ]
+    then
+        echo "Must supply tkc id to test"
+        return 1
+    fi
+
+    log "ko get po -l tkc_id=$1"
+    ko get po -l tkc_id=$1 -o wide
+}
+
+# get Tenant Agent version for cluster
+kk.get.ta.version () {
+   if [ -z "$1" ]
+    then
+        echo "Must supply cluster/tkc id to test"
+        return 1
+    fi
+
+
+   log "Getting TKC pods for '$1'"
+   pods=$(kk.get.tkc.pods $1)
+   # get the TA pod
+   ta_pod=$(echo "$pods" | grep "\-ta\-" | awk '{print $1}')
+
+   log "Tenant-Agent pod: $ta_pod"
+
+   # describe pod
+   describe_pod=$(kubectl -n ns-user-oke describe pod/$ta_pod)
+   image=$(echo "$describe_pod" | grep "tenant-agent\:" -B 0 -A 4 | grep "Image\:" | awk '{print $2}')
+
+   echo "Image: $image"
+}
+
+
+# List pods on a specific node
+kk.list.node.pods () {
+    if [ -z "$1" ]
+    then
+        echo "Must supply node to test"
+        return 1
+    fi
+
+    log "ko get po --all-namespaces --field-selector=spec.nodeName=$1"
+    ko get po --all-namespaces --field-selector=spec.nodeName=$1
+}
+
+# list containers for a pod
+kk.list.containers () {
+    if [ -z "$1" ]
+    then
+        echo "Must supply pod to test"
+        return 1
+    fi
+
+    log "ko get pods "$1" -o jsonpath='{.spec.containers[*].name}' | xargs"
     ko get pods "$1" -o jsonpath='{.spec.containers[*].name}' | xargs
 }
 
+# Exec /bin/sh into the kube proxy
+kk.kube.proxy() {
+    if [ -z "$1" ]
+    then
+        echo "Must supply TKC id to test"
+        return 1
+    fi
+
+    local tkc_id=$1
+
+    all_pods=$(kk.get.pods $tkc_id)
+    addon_pods=$(echo "$all_pods" |  grep addons | awk '{print $1}')
+
+    log ">>ko exec -it $addon_pods  -c kube-proxy -- /bin/sh"
+    ko exec -it "$addon_pods"  -c kube-proxy -- /bin/sh
+}
+
 # Check TKC for health
-k.check.tkc.health () {
+kk.check.tkc.health () {
     if [ -z "$1" ]
     then
         echo "Must supply pod to test"
@@ -35,7 +198,7 @@ k.check.tkc.health () {
     fi
 
     if [[ "$1" == "-h" ]]; then
-        echo "k.check.tkc.health [TKC_ID]: Checks health endpoint on metrics for tkc"
+        echo "kk.check.tkc.health [TKC_ID]: Checks health endpoint on metrics for tkc"
         return 0
     fi
 
@@ -109,7 +272,7 @@ k.check.tkc.health () {
 }
 
 # Check if we can run kubectl against this node
-k.testnode () {
+kk.testnode () {
     if [ -z "$1" ]
     then
         echo "Must supply node to test"
@@ -117,7 +280,7 @@ k.testnode () {
     fi
 
     if [[ "$1" == "-h" ]]; then
-        echo "k.testnode [NODE]: Creates test pod against node with kubectl"
+        echo "kk.testnode [NODE]: Creates test pod against node with kubectl"
         return 0
     fi
 
@@ -141,8 +304,8 @@ k.testnode () {
     echo "done kubectl test"
 }
 
-# Verify k.testnode's pod is running on correct node
-k.verify.testnode () {
+# Verify kk.testnode's pod is running on correct node
+kk.verify.testnode () {
     if [ -z "$1" ]
     then
         echo "Must supply node to vierfy"
@@ -150,7 +313,7 @@ k.verify.testnode () {
     fi
 
     if [[ "$1" == "-h" ]]; then
-        echo "k.verify.testnode [NODE]: Prints out location of test pod"
+        echo "kk.verify.testnode [NODE]: Prints out location of test pod"
         return 0
     fi
 
@@ -168,18 +331,16 @@ k.verify.testnode () {
 
 
 # Check clusters on a node
-k.check.clusters () {
+kk.check.clusters () {
     if [ "$#" -eq 0 ]; then
         echo "Err: Must supply node name."
         exit 1
     fi
 
     if [[ "$1" == "-h" ]]; then
-        echo "k.check.clusters [NODE]: Checks all clusters that are running on the node for healthyness"
+        echo "kk.check.clusters [NODE]: Checks all clusters that are running on the node for healthyness"
         return 0
     fi
-
-
 
     bold=$(tput bold)
     normal=$(tput sgr0)

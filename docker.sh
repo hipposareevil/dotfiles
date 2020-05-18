@@ -143,36 +143,6 @@ function d.rm.volume() {
     d volume rm $(docker volume ls -qf dangling=true)
 }
 
-##########
-
-# tahoma-1
-function d.t1() {
-    unproxy
-    export DOCKER_TLS_VERIFY=1
-    export DOCKER_HOST=tcp://tahoma-1.us.oracle.com:2376
-    export DOCKER_CERT_PATH=~/Dropbox/work/docker/certs/tahoma-1
-    export DOCKER_MACHINE_NAME=default
-}
-
-# tahoma-2
-function d.t2() {
-    unproxy
-    export DOCKER_TLS_VERIFY=1
-    export DOCKER_HOST=tcp://tahoma-2.us.oracle.com:2376
-    export DOCKER_CERT_PATH=~/Dropbox/work/docker/certs/tahoma-2
-    export DOCKER_MACHINE_NAME=default
-}
-
-# tahoma-3
-function d.t3() {
-    unproxy
-    export DOCKER_TLS_VERIFY=1
-    export DOCKER_HOST=tcp://tahoma-3.us.oracle.com:2376
-    export DOCKER_CERT_PATH=~/Dropbox/work/docker/certs/tahoma-3
-    export DOCKER_MACHINE_NAME=default
-}
-
-
 
 function d.wpff() {
     unproxy

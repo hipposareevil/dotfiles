@@ -21,11 +21,7 @@ export LANG=en_US.UTF-8
 # emacs
 alias emacs=~/Dropbox/dotfiles/bin/emacs
 
-
-####
-# tmux
-alias t=tmux
-
+alias t=terraform
 
 function diff {
      colordiff -u "$@" | less -RF
@@ -35,7 +31,8 @@ function diff {
 #ZSH_THEME="kolo"
 ZSH_THEME="agnoster"
 
-plugins=(git docker zsh-autosuggestions)
+
+plugins=(git docker zsh-autosuggestions mvn)
 
 export ZSH=$drop_dot_dir/.oh-my-zsh
 source $ZSH/oh-my-zsh.sh
@@ -175,6 +172,15 @@ function wich() {
     ag --ignore "*~" "function $@\(\)" ~/Dropbox $TOOLS_ROOT
 }
 
+# Convert simplified wildcard pattern to regex and grep a file listing using
+# Silver Searcher (`brew install the_silver_searcher`)
+lsgrep ()
+{
+    NEEDLE="$(echo $@|sed -E 's/\.([a-z0-9]+)$/\\.\1/'|sed -E 's/\?/./'| sed -E 's/[ *]/.*?/g')";
+    ag --depth 3 -S -g "$NEEDLE" 2> /dev/null
+}
+
+
 # less
 LESSPIPE=`find /usr/local/Cellar | grep src-hilite-lesspipe.sh`
 #LESSPIPE=`which src-hilite-lesspipe.sh`
@@ -193,3 +199,134 @@ source $drop_dot_dir/git.sh
 ########
 # docker
 source $drop_dot_dir/docker.sh
+
+#######
+# maven
+function m.core {
+    echo "Changing maven for core."
+    cp ~/.m2/settings.xml.core  ~/.m2/settings.xml
+}
+
+function m.einstein {
+    echo "Changing maven for einstein."
+    cp ~/.m2/settings.xml.e1  ~/.m2/settings.xml
+}
+
+
+########
+# Kubernetes
+source $drop_dot_dir/kubernetes.sh
+
+vaultsel () {
+	local vaults vault_ldap_user
+	vault_ldap_user="samuel.jackson" 
+	vaults=("https://vault-ops.build-usw2.platform.einstein.com" "https://vault.build-usw2.platform.einstein.com" "https://vault.dev.platform.einstein.com" "https://vault.staging.platform.einstein.com" "https://vault.rc.platform.einstein.com" "https://vault.prod.platform.einstein.com" "https://vault.rc-euc1.platform.einstein.com" "https://vault.prod-euc1.platform.einstein.com" "https://vault.perf-usw2.platform.einstein.com") 
+	VAULT_ADDR=$(printf '%s\n' "${vaults[@]}" | fzf) 
+	export VAULT_ADDR
+	unset VAULT_TOKEN
+	if ! vault token lookup > /dev/null 2>&1
+	then
+		vault login -no-print -method="ldap" username="$vault_ldap_user"
+	fi
+	VAULT_TOKEN=$(vault print token) 
+	export VAULT_TOKEN
+	echo "Switched to Vault cluster \"${VAULT_ADDR}\""
+}
+
+
+
+#######
+# dad access
+
+function _dad.query {
+    scope=$1
+    who=$2
+
+    result=$(dad list ${scope} | grep ${who})
+    local code=$?
+    echo ""
+    echo "** ${scope} **"
+    if [ $code -eq 0 ]; then
+        echo "$result"
+        echo "[[ SUCCESS ]]"
+    else
+        echo "No access for '${who}' in '${scope}'."
+        echo "Double checking..."
+        # double check with second dad call
+        second_result=$(dad check ${scope} ${who})
+        code=$?
+        if [ $code -eq 0 ]; then
+            echo "Access for '${who}' exists for '${scope}'"
+            echo "[[ SUCCESS ]]"
+        else
+            echo "For sure no acccess for '${who}' in '${scope}'"
+            echo "[[ Failure ]]"
+        fi
+    fi
+}
+
+# query access for the incoming user against all 3 scopes
+function dad.query {
+    who=$1
+
+    # get environment
+    local env=$(head -1 ~/.dad/credentials)  
+    env=$(echo "$env" | awk -F= '{print $2}')
+
+    echo "Looking for enabled scopes for \"${who}\" in environment [${env}]"
+
+    _dad.query "internalApi" ${who}
+    _dad.query "internalApiRead" ${who}
+    _dad.query "internalApiCredentials" ${who}
+}
+
+# Add incoming user to scope
+function _dad.add {
+    scope=$1
+    who=$2
+
+    echo "** Adding '${who}' to scope '${scope}'**"
+    result=$(dad member ${scope} add ${who})
+    echo "${result}"
+    echo ""
+}
+
+
+# Add the incoming user to all 3 scopes
+function dad.add_all {
+    who=$1
+
+    # get environment
+    local env=$(head -1 ~/.dad/credentials)  
+    env=$(echo "$env" | awk -F= '{print $2}')
+
+    _dad.add "internalApi" ${who}
+    _dad.add "internalApiRead" ${who}
+    _dad.add "internalApiCredentials" ${who}
+}
+
+
+# Delete incoming user from scope
+function _dad.nuke {
+    scope=$1
+    who=$2
+
+    echo "** Deleting '${who}' from scope '${scope}'**"
+    result=$(dad member ${scope} delete ${who})
+    echo "${result}"
+    echo ""
+}
+
+
+# Delete the incoming user from all 3 scopes
+function dad.nuke_all {
+    who=$1
+
+    # get environment
+    local env=$(head -1 ~/.dad/credentials)  
+    env=$(echo "$env" | awk -F= '{print $2}')
+
+    _dad.nuke "internalApi" ${who}
+    _dad.nuke "internalApiRead" ${who}
+    _dad.nuke "internalApiCredentials" ${who}
+}

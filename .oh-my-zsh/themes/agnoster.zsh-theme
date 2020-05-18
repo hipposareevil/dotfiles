@@ -44,6 +44,24 @@ prompt_segment() {
   [[ -n $3 ]] && echo -n $3
 }
 
+
+prompt_color() {
+  local bg fg
+  [[ -n $1 ]] && bg="%K{$1}" || bg="%k"
+  [[ -n $2 ]] && fg="%F{$2}" || fg="%f"
+  if [[ $CURRENT_BG != 'NONE' && $1 != $CURRENT_BG ]]; then
+    echo -n " %{$bg%F{$CURRENT_BG}%}%{$fg%}"
+  else
+    echo -n "%{$bg%}%{$fg%}"
+  fi
+  CURRENT_BG=$1
+  [[ -n $3 ]] && echo -n $3
+}
+
+
+
+
+
 # End the prompt, closing any open segments
 prompt_end() {
 #  echo ""
@@ -252,12 +270,32 @@ parse_tunnel() {
 # get the location our kubeconfig is pointing to
 parse_kubeconfig() {
    if [ ! -z $KUBECONFIG ]; then
-     location=$(cat $KUBECONFIG | grep "current-context:" | sed "s/current-context: //")
-     prompt_segment cyan white
-     echo -n "❑${location}❑"
+       # Get location
+       location=$(cat $KUBECONFIG | grep "current-context:" | sed "s/current-context: //")
+       prompt_segment cyan black
+       echo -n "<${location}>"
+       
+       # get namespace
+       namespace=$(grep "namespace" $KUBECONFIG | sed "s/namespace: //" | xargs)
+       echo -n " [${namespace}]"
+
    fi
 }
 
+
+# get environment for access/dad
+parse_access() {
+    git_remote=$(git remote -v 2>&1 | head -1)
+    if [[ $git_remote == *"github.salesforceiq.com/einstein/domain-admins.git"* ]]; then
+        # get name of environment from credentials
+        local env=$(head -1 ~/.dad/credentials)  
+        env=$(echo "$env" | awk -F= '{print $2}')
+
+        # set colors
+        prompt_color black red
+        echo -n "[$env]"
+    fi
+}
 
 
 
@@ -265,8 +303,9 @@ parse_kubeconfig() {
 build_prompt() {
   RETVAL=$?
   parse_proxy
-  parse_tunnel
   parse_kubeconfig
+
+  parse_access
       
 #  prompt_status
 #  prompt_virtualenv
