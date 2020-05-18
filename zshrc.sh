@@ -19,7 +19,7 @@ export LANG=en_US.UTF-8
 
 ###
 # emacs
-alias emacs=~/Dropbox/dotfiles/bin/emacs
+alias emacs=${drop_dot_dir}/bin/emacs
 
 alias t=terraform
 
@@ -169,7 +169,7 @@ function wich() {
     which $@
     echo "Finding location of function...."
     # look in dropbox and tools/utils
-    ag --ignore "*~" "function $@\(\)" ~/Dropbox $TOOLS_ROOT
+    ag --ignore "*~" "function $@\(\)" ${drop_dot_dir} $TOOLS_ROOT
 }
 
 # Convert simplified wildcard pattern to regex and grep a file listing using

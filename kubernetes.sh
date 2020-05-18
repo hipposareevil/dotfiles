@@ -1,8 +1,14 @@
+alias k="kubectl"
+
 CONTAINER_NAME="ep-api"
 # Log
 log () {
     >&2 echo ">> $1"
     >&2 echo ""
+}
+
+k.work() {
+    export KUBECONFIG=/Users/samuel.jackson/.kube/config
 }
 
 # Find anything and describe it
@@ -22,6 +28,241 @@ k.sec () {
 }
 
 
+# Get image version of helm chart
+h.get.version () {
+    if [ -z "$1" ]
+    then
+        echo "Must supply helm chart installation. e.g. 'superfunk-tenant'"
+        return 1
+    fi
+    if [[ "$1" == "-h" ]]; then
+        echo "Usage: $0 [helm name]"
+        echo "Get docker image version for the helm chart"
+        echo ""
+        echo "$0 superfunk-tenant"
+        return 1
+    fi
+
+
+    helm_name=$1
+
+    result=$(helm get all ${helm_name} | grep image | grep harbor | awk '{print $2}' | sed s/\"//g)
+    echo "Helm chart '${helm_name}' is running:"
+    echo "$result"
+}
+
+
+
+# Deploy tenant via helm chart
+# Must supply name of helm instance
+
+# deploy with repo 'tenant-service'
+h.deploy.tenant.dev () {
+    if [ -z "$1" ]
+    then
+        echo "Must supply helm/service name"
+        return 1
+    fi
+    if [[ "$1" == "-h" ]]; then
+        echo "Usage: $0 [helm name] <tag name>"
+        echo "Deploy from the 'tenant-service' repo"
+        echo ""
+        echo "$0 super-helm-name <ai.3.2.1>"
+        return 1
+    fi
+
+    helm_name=$1
+    image_tag=$2
+
+    _h.deploy.tenant "$helm_name" "tenant-service" "${image_tag}"
+}
+
+# deploy with normal repo 'docker'
+h.deploy.tenant () {
+    if [ -z "$1" ]
+    then
+        echo "Must supply helm/service name"
+        return 1
+    fi
+
+    if [[ "$1" == "-h" ]]; then
+        echo "Usage: $0 [helm name] <tag name>"
+        echo "Deploy from the 'docker' repo"
+        echo ""
+        echo "$0 super-helm-name <ai.3.2.1>"
+        return 1
+    fi
+
+
+
+    helm_name=$1
+    image_tag=$2
+    
+
+    _h.deploy.tenant "$helm_name" "docker" "${image_tag}"
+}
+
+_h.deploy.tenant () {
+    helm_name="$1"
+    repo_name="$2"
+    image_tag="$3"
+
+    service_name="tenant-service"
+    full_repo="harbor.k8s.platform.einstein.com/${repo_name}"
+
+    # validate we are in correct repo
+    git_remote=$(git remote -v 2>&1 | head -1)
+    if [[ $git_remote != *"github.com/einsteinplatform/helm.git"* ]]; then
+        echo "Must be in the helm git repo directory: 'github.com/einsteinplatform/helm.git'"
+        return 1
+    fi
+
+    # get root of repo
+    git_root=$(git rev-parse --show-toplevel)
+
+    # Get latest version
+    if [ ! -z "$image_tag" ]; then
+        TAG_TO_USE="$image_tag"
+    else
+        TAG_TO_USE=$(curl -H "accept: application/json" -L -s -q -k -X GET \
+                          "harbor.k8s.platform.einstein.com/api/repositories/${repo_name}/${service_name}/tags" \
+                         | jq -r ".[] | [.name] | .[]" | sort -V | grep -v SNAPSHOT | grep -v ai | tail -1)
+
+    fi
+
+    log "Creating helm chart: $helm_name"
+    log "Using tag: $TAG_TO_USE"
+
+
+    yaml="${git_root}/ep-tenant/values/dev-usw2.yaml"
+
+    # Upgrade
+    log "helm upgrade --install $helm_name prod/ep-common -f ${yaml} --set appName=${helm_name} --set docker.tag=$TAG_TO_USE --set docker.repository=${full_repo}"
+
+    echo "Deploying ${helm_name} with 'tenant-service:${TAG_TO_USE}'"
+
+    result=$(helm upgrade --install $helm_name \
+                  prod/ep-common \
+                  -f ${yaml} \
+                  --set appName=${helm_name} \
+                  --set docker.repository=${full_repo} \
+                  --set docker.tag=$TAG_TO_USE)
+    echo "$result"
+}
+
+# Get tags for repo
+# e.g.--> h.get.tags docker tenant-service
+h.get.tags() {
+    repo_name="$1"
+    service_name="$2"
+
+    if [[ "$1" == "-h" ]]; then
+        echo "Usage: $0 [repo name] [service name]"
+        echo "Get list of tags for a repo and service name" 
+        echo ""
+        echo "$0 tenant-service tenant-service"
+        echo "$0 docker tenant-service"
+        return 1
+    fi
+
+    LATEST=$(curl -H "accept: application/json" -L -s -q -k -X GET \
+                  "harbor.k8s.platform.einstein.com/api/repositories/${repo_name}/${service_name}/tags" \
+                 | jq -r ".[] | [.name] | .[]" | sort -V)
+
+    echo "$LATEST"
+}
+
+
+# Deploy application service via helm chart
+# Must supply name of helm instance
+
+# deploy with repo 'application-service'
+h.deploy.application.dev () {
+    if [ -z "$1" ]
+    then
+        echo "Must supply helm/service name"
+        return 1
+    fi
+    if [[ "$1" == "-h" ]]; then
+        echo "Usage: $0 [helm name] <tag name>"
+        echo "Deploy from the 'application-service' repo"
+        echo ""
+        echo "$0 super-helm-name <ai.3.2.1>"
+        return 1
+    fi
+
+    helm_name=$1
+    image_tag=$2
+
+
+    _h.deploy.application "$helm_name" "application-service" "${image_tag}"
+}
+
+# deploy with normal repo 'docker'
+h.deploy.application () {
+    if [ -z "$1" ]
+    then
+        echo "Must supply helm/service name"
+        return 1
+    fi
+    if [[ "$1" == "-h" ]]; then
+        echo "Usage: $0 [helm name] <tag name>"
+        echo "Deploy from the 'docker' repo"
+        echo ""
+        echo "$0 super-helm-name <ai.3.2.1>"
+        return 1
+    fi
+
+    helm_name=$1
+    image_tag=$2
+
+    _h.deploy.application "$helm_name" "docker" "${image_tag}"
+}
+
+_h.deploy.application () {
+    helm_name="$1"
+    repo_name="$2"
+    image_tag="$3"
+    service_name="application-service"
+    full_repo="harbor.k8s.platform.einstein.com/${repo_name}"
+
+    # validate we are in correct repo
+    git_remote=$(git remote -v 2>&1 | head -1)
+    if [[ $git_remote != *"github.com/einsteinplatform/helm.git"* ]]; then
+        echo "Must be in the helm git repo directory: 'github.com/einsteinplatform/helm.git'"
+        return 1
+    fi
+
+    # get root of repo
+    git_root=$(git rev-parse --show-toplevel)
+
+    # Get latest version
+    if [ ! -z "$image_tag" ]; then
+        TAG_TO_USE="$image_tag"
+    else
+        TAG_TO_USE=$(curl -H "accept: application/json" -L -s -q -k -X GET \
+                          "harbor.k8s.platform.einstein.com/api/repositories/${repo_name}/${service_name}/tags" \
+                         | jq -r ".[] | [.name] | .[]" | sort -V | grep -v SNAPSHOT | tail -1)
+    fi
+
+    yaml="${git_root}/ep-api/values/dev-usw2.yaml"
+
+    # Upgrade
+    log "helm upgrade --install $helm_name prod/ep-common -f ${yaml} --set appName=${helm_name} --set docker.tag=$TAG_TO_USE --set docker.repository=${full_repo}"
+
+    echo "Deploying ${helm_name} with 'application-service:${TAG_TO_USE}'"
+
+    result=$(helm upgrade --install $helm_name \
+                  prod/ep-common \
+                  -f ${yaml}  \
+                  --set appName=${helm_name} \
+                  --set docker.repository=${full_repo} \
+                  --set docker.tag=$TAG_TO_USE)
+    echo "$result"
+}
+
+
+
 # Get pods on a node
 k.get.pods.for.node () {
     if [ -z "$1" ]
@@ -33,7 +274,7 @@ k.get.pods.for.node () {
     node=$1
 
     echo "Getting pods for node '${node}'"
-    log ">>k get pods -o wide  --all-namespaces | grep $node"
+    log "get pods -o wide  --all-namespaces | grep $node"
 
     pods=$(kubectl get pods -o wide  --all-namespaces | grep $node)
 
@@ -42,26 +283,41 @@ k.get.pods.for.node () {
 
 # Get all worker nodes
 k.get.worker.nodes () {
-    log "k get nodes -l kops.k8s.io/instancegroup=nodes"
-    nodes=$(kubectl get nodes -l kops.k8s.io/instancegroup=nodes)
+    log "k get nodes -o wide -l kops.k8s.io/instancegroup=nodes"
+    nodes=$(kubectl get nodes -o wide -l kops.k8s.io/instancegroup=nodes)
 
     echo "${nodes}"
 }
 
 # Get all master nodes
 k.get.master.nodes () {
-    log "k get nodes -l kops.k8s.io/instancegroup!=nodes"
-    nodes=$(kubectl get nodes -l kops.k8s.io/instancegroup!=nodes)
+    log "k get nodes  -o wide  -l kops.k8s.io/instancegroup!=nodes"
+    nodes=$(kubectl get nodes  -o wide -l kops.k8s.io/instancegroup!=nodes)
 
     echo "${nodes}"
 }
 
+function _k.get.pods.header() {
+    k get pods -o wide | head -1
+}
 
 # Get all pods 
 k.get.pods () {
-    log "k get pods -o wide"
+#    log "k get pods -o wide"
     pods=$(kubectl get pods -o wide)
+    if [ ! -z $1 ]; then
+        _k.get.pods.header
+        pods=$(echo "${pods}" | grep $1)
+    fi
+
     echo "${pods}"
+}
+
+# get ingresses
+k.get.ingress () {
+    log "k get ingress"
+    ingress=$(kubectl get ingress)
+    echo "${ingress}"
 }
 
 # list containers for a pod

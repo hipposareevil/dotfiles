@@ -269,14 +269,24 @@ parse_tunnel() {
 
 # get the location our kubeconfig is pointing to
 parse_kubeconfig() {
-   if [ ! -z $KUBECONFIG ]; then
+   if [[ ! -z $KUBECONFIG &&  -f $KUBECONFIG  ]]; then
+       prompt_segment cyan black
+
        # Get location
        location=$(cat $KUBECONFIG | grep "current-context:" | sed "s/current-context: //")
-       prompt_segment cyan black
-       echo -n "<${location}>"
+ 
+       # Get cluster name
+       cluster_name=$(cat $KUBECONFIG | grep "current-context:" | sed "s/current-context: //")
+
+       if [[ $cluster_name == *"-"* ]]; then
+          cluster_name=$(echo "$cluster_name"  | awk -F - '{print $2"-"$3}')
+       fi
+
+       echo -n "<${cluster_name}>"
        
-       # get namespace
-       namespace=$(grep "namespace" $KUBECONFIG | sed "s/namespace: //" | xargs)
+        # Get namespace
+       namespace=$(cat $KUBECONFIG | grep -ws "cluster: ${cluster_name}" -A 2 | grep namespace | sed "s/namespace: //" | xargs)
+#       namespace=$(grep "namespace" $KUBECONFIG | sed "s/namespace: //" | xargs)
        echo -n " [${namespace}]"
 
    fi

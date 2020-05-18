@@ -1,17 +1,21 @@
 alias g.fetch="git fetch origin"
 alias g.pull="git pull"
 alias g.master="git checkout master"
-
 alias g.log="git shortlog --summary --numbered"
 
+# Get commit for tag and show logs
+function g.get.tag() {
+    if [ -z "$1" ]
+    then
+        echo "Must supply git tag"
+        return 1
+    fi
+    if [[ "$1" == "-h" ]]; then
+        echo "Usage: $0 [git tag]"
+        echo "Show git commit and history for tag"
+    fi
 
-## git
-function g.proxy() {
-  git config --global --add https.proxy http://rmdc-proxy.oracle.com:80
-  git config --global --add http.proxy http://rmdc-proxy.oracle.com:80
-}
-
-function g.unproxy() {
-  git config --global --unset-all http.proxy  
-  git config --global --unset-all https.proxy  
+    tag=$1
+    commit=$(git rev-list -n 1 $tag)
+    git log -p $commit    
 }
