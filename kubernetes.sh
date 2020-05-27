@@ -239,7 +239,7 @@ _h.deploy.application () {
 
     # validate we are in correct repo
     git_remote=$(git remote -v 2>&1 | head -1)
-    if [[ $git_remote != *"github.com/einsteinplatform/helm.git"* ]]; then
+    if [[ $git_remote != *"einsteinplatform/helm.git"* ]]; then
         echo "Must be in the helm git repo directory: 'github.com/einsteinplatform/helm.git'"
         return 1
     fi
