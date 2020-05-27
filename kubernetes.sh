@@ -7,6 +7,13 @@ log () {
     >&2 echo ""
 }
 
+# Create and enter a toolkit pod
+k.toolkit() {
+    echo "Running alpine.toolkit:"
+    echo "kubectl run shell --generator=run-pod/v1  --rm -i --tty --image hipposareevil/alpine.toolkit -- bash"
+    kubectl run shell --generator=run-pod/v1  --rm -i --tty --image hipposareevil/alpine.toolkit -- bash
+}
+
 k.work() {
     export KUBECONFIG=/Users/samuel.jackson/.kube/config
 }
@@ -65,7 +72,8 @@ h.deploy.tenant.dev () {
     fi
     if [[ "$1" == "-h" ]]; then
         echo "Usage: $0 [helm name] <tag name>"
-        echo "Deploy from the 'tenant-service' repo"
+        echo "Deploy from the 'tenant-service'"
+        echo "Defaults to using latest tag"
         echo ""
         echo "$0 super-helm-name <ai.3.2.1>"
         return 1
@@ -88,6 +96,7 @@ h.deploy.tenant () {
     if [[ "$1" == "-h" ]]; then
         echo "Usage: $0 [helm name] <tag name>"
         echo "Deploy from the 'docker' repo"
+        echo "Defaults to using latest tag"
         echo ""
         echo "$0 super-helm-name <ai.3.2.1>"
         return 1
@@ -112,7 +121,7 @@ _h.deploy.tenant () {
 
     # validate we are in correct repo
     git_remote=$(git remote -v 2>&1 | head -1)
-    if [[ $git_remote != *"github.com/einsteinplatform/helm.git"* ]]; then
+    if [[ $git_remote != *"einsteinplatform/helm.git"* ]]; then
         echo "Must be in the helm git repo directory: 'github.com/einsteinplatform/helm.git'"
         return 1
     fi
@@ -186,6 +195,7 @@ h.deploy.application.dev () {
     if [[ "$1" == "-h" ]]; then
         echo "Usage: $0 [helm name] <tag name>"
         echo "Deploy from the 'application-service' repo"
+        echo "Defaults to using latest tag"
         echo ""
         echo "$0 super-helm-name <ai.3.2.1>"
         return 1
@@ -208,6 +218,7 @@ h.deploy.application () {
     if [[ "$1" == "-h" ]]; then
         echo "Usage: $0 [helm name] <tag name>"
         echo "Deploy from the 'docker' repo"
+        echo "Defaults to using latest tag"
         echo ""
         echo "$0 super-helm-name <ai.3.2.1>"
         return 1
