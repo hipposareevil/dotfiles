@@ -5,7 +5,6 @@
 
 
 alias k="kubectl"
-CONTAINER_NAME="ep-api"
 
 # Log
 log () {
@@ -39,6 +38,34 @@ k.sec () {
     secret_field="$(kubectl get "${secret_name}" --output=go-template --template='{{range $k, $v := .data}}{{$k}} {{end}}' | tr -s '[[:space:]]' '\n' | fzf)" 
     kubectl get "${secret_name}" --output="jsonpath={.data.${secret_field}}" | base64 --decode
 }
+
+# Get tags for docker repository
+# e.g.--> k.get.tags docker tenant-service
+k.get.tags() {
+    if [[ "$1" == "-h" ]]; then
+        echo "Usage: $0 [repo name] [service name]"
+        echo "Get list of tags for a repo and service name" 
+        echo ""
+        echo "$0 tenant-service tenant-service"
+        echo "$0 docker tenant-service"
+        return 1
+    fi
+
+    repo_name="$1"
+    service_name="$2"
+
+    if [ $# -ne 2 ];  then
+        echo "Must supply repo and service names"
+        return 1
+    fi
+
+
+    LATEST=$(curl -H "accept: application/json" -L -s -q -k -X GET \
+                  "harbor.k8s.platform.einstein.com/v2/${repo_name}/${service_name}/tags/list" \
+                 | jq -r ".tags | .[]" | sort -V )
+    echo "$LATEST"
+}
+
 
 # Get current namespace
 k.get.namespace () {
@@ -132,17 +159,24 @@ k.get.services () {
 }
 
 # Exec /bin/sh into the pod
-k.proxy() {
+k.exec() {
     if [ -z "$1" ]
     then
-        echo "Must supply pod to test"
+        echo "Must supply filter to test"
         return 1
     fi
 
-    local pod=$1
+    if [[ "$1" == "-h" ]]; then
+        echo "Usage: $0 [filter]"
+        echo "Exec into first pod that matches the filter"
+        echo ""
+        return 1
+    fi
 
-    log ">>ka exec -it $pod_pods -c ${CONTAINER_NAME} -- /bin/sh"
-    k exec -it "$pod" -c ${CONTAINER_NAME} -- /bin/sh
+    local filter=$1
+    pod=$(kubectl get pods -o wide | grep $filter| head -1 | awk '{print $1}')
+    log "Execing into pod '$pod'"
+    k exec -it "$pod"  -- /bin/bash
 }
 
 

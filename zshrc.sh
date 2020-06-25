@@ -217,6 +217,10 @@ function m.einstein {
 # Kubernetes
 source $drop_dot_dir/kubernetes.sh
 
+########
+# Helm
+source $drop_dot_dir/helm.sh
+
 vaultsel () {
 	local vaults vault_ldap_user
 	vault_ldap_user="samuel.jackson" 

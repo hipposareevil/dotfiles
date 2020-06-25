@@ -26,6 +26,30 @@ function d.disk() {
     d system df -v
 }
 
+
+
+# Exec /bin/sh into the container
+d.exec() {
+    if [ -z "$1" ]
+    then
+        echo "Must supply filter to test"
+        return 1
+    fi
+
+    if [[ "$1" == "-h" ]]; then
+        echo "Usage: $0 [filter]"
+        echo "Exec into first container that matches the filter"
+        echo ""
+        return 1
+    fi
+
+    local filter=$1
+    container=$(docker ps | grep $filter| head -1 | awk '{print $1}')
+    log "Execing into container '$container'"
+    d exec -it "$container" /bin/bash
+}
+
+
 # get stats
 function d.stats() {
     if [ "$#" -eq 1 ]; then

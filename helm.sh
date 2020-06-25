@@ -16,6 +16,7 @@ logit() {
 h.get.version () {
     if [ -z "$1" ]
     then
+        echo "Usage: $0 [helm name]"
         echo "Must supply helm chart installation. e.g. 'superfunk-tenant'"
         return 1
     fi
@@ -23,10 +24,10 @@ h.get.version () {
         echo "Usage: $0 [helm name]"
         echo "Get docker image version for the helm chart"
         echo ""
+        echo "Example:"
         echo "$0 superfunk-tenant"
         return 1
     fi
-
 
     helm_name=$1
 
@@ -34,6 +35,29 @@ h.get.version () {
     echo "Helm chart '${helm_name}' is running:"
     echo "$result"
 }
+
+
+
+# Get chart versions from repo
+h.get.repo () {
+    if [[ "$1" == "-h" ]]; then
+        echo "Usage: $0 <chart name>"
+        echo "Get helm repo by name"
+        echo ""
+        echo "Example:"
+        echo "$0 ep-common"
+        return 1
+    fi
+
+    default="prod"
+    chart=${1:-$default}
+    echo "Looking for chart '${chart}'"
+    top=$(helm search repo prod --versions | head -1)
+    results=$(helm search repo prod --versions | grep -v bitnami | grep ${chart})
+    echo "$top"
+    echo "$results"
+}
+
 
 
 # Deploy postgres
@@ -84,10 +108,11 @@ h.run.db.manager () {
 
     logit ""
     logit "Get tags for db-manager"
-    # use latest db-manager
+
+    # use latest db-manager, ignoring 'ai' and 'snapshot
     latest_tag=$(curl -H "accept: application/json" -L -s -q -k -X GET \
-                 "harbor.k8s.platform.einstein.com/api/repositories/docker/einstein-db-manager/tags" \
-                 | jq -r ".[] | [.name] | .[]" \
+                 "harbor.k8s.platform.einstein.com/v2/docker/einstein-db-manager/tags/list" \
+                 | jq -r ".tags | .[]" \
                  | grep -v "ai" | grep -v "snapshot" | sort -V | tail -1)
 
     logit "Using ${db_manager_image}:${latest_tag}"
@@ -234,6 +259,34 @@ _h.add.prod.repo () {
 
 
 # Deploy tenant via helm chart
+# deploy with repo 'docker'
+h.deploy.tenant () {
+    namespace=$(k.get.namespace)
+    application_name="${namespace}-tenant"
+
+    if [[ "$1" == "-h" ]]; then
+        echo "Usage: $0 [helm name] <tag name>"
+        echo ""
+        echo "Deploy from the 'docker' repo"
+        echo ""
+        echo "Defaults to helm name of '$application_name'"
+        echo "Defaults to using latest tag"
+        echo ""
+        echo "Example:"
+        echo "$0 <super-helm-name> <2020.06.11.5>"
+        return 1
+    fi
+
+    if [[ ! -z "$1" ]]; then
+        application_name=$1
+    fi
+    image_tag=$2
+
+    _h.deploy.tenant "$application_name" "docker" "application-db.dev.platform.einstein.com" "${image_tag}"
+}
+
+
+# Deploy tenant via helm chart
 # deploy with repo 'tenant-service'
 h.deploy.tenant.dev () {
     namespace=$(k.get.namespace)
@@ -247,7 +300,8 @@ h.deploy.tenant.dev () {
         echo "Defaults to helm name of '$application_name'"
         echo "Defaults to using latest tag"
         echo ""
-        echo "$0 <super-helm-name> <ai.3.2.1>"
+        echo "Example:"
+        echo "$0 <super-helm-name> <2020.06.11.5>"
         return 1
     fi
 
@@ -258,6 +312,7 @@ h.deploy.tenant.dev () {
 
     _h.deploy.tenant "$application_name" "tenant-service" "application-db.dev.platform.einstein.com" "${image_tag}"
 }
+
 
 # deploy with repo 'tenant-service' and DB
 h.deploy.tenant.dev.db () {
@@ -275,7 +330,8 @@ h.deploy.tenant.dev.db () {
         echo "Defaults to helm name of '$application_name'"
         echo "Defaults to using latest tag"
         echo ""
-        echo "$0 <super-helm-name> <ai.3.2.1>"
+        echo "Example:"
+        echo "$0 <super-helm-name> <2020.06.11.5>"
         return 1
     fi
 
@@ -316,18 +372,17 @@ _h.deploy.tenant () {
         TAG_TO_USE="$image_tag"
     else
         TAG_TO_USE=$(curl -H "accept: application/json" -L -s -q -k -X GET \
-                          "harbor.k8s.platform.einstein.com/api/repositories/${repo_name}/${service_name}/tags" \
-                         | jq -r ".[] | [.name] | .[]" | sort -V | grep -v SNAPSHOT | grep -v ai | tail -1)
+                          "harbor.k8s.platform.einstein.com/v2/${repo_name}/${service_name}/tags/list" \
+                         | jq -r ".tags | .[]" | grep -v SNAPSHOT | grep -v ai | sort -V | tail -1 )
     fi
 
     logit "Creating helm chart: $helm_name"
     logit "Using tag: $TAG_TO_USE"
 
-
     dev_yaml="${git_root}/ep-tenant/values/dev-usw2.yaml"
 
     # Upgrade
-    logit "helm upgrade --install $helm_name prod/ep-common -f ${dev_yaml} --set appConfigs.environ.EINSTEIN1_DATABASE_URL=${database_url} --set appName=${helm_name} --set docker.tag=$TAG_TO_USE --set docker.repository=${full_repo}"
+    logit "helm upgrade --install $helm_name prod/ep-common -f ${dev_yaml} --set ingress.urlOverride='' --set appConfigs.environ.EINSTEIN1_DATABASE_URL=${database_url} --set appName=${helm_name} --set docker.tag=$TAG_TO_USE --set docker.repository=${full_repo} --set deployment.strategy.rollingUpdate.maxSurge=100 "
     logit ""
     logit "Deploying ${helm_name} with 'tenant-service:${TAG_TO_USE}'"
     logit ""
@@ -337,38 +392,45 @@ _h.deploy.tenant () {
                   --set appConfigs.environ.EINSTEIN1_DATABASE_URL="${database_url}" \
                   -f ${dev_yaml} \
                   --set appName=${helm_name} \
+                  --set ingress.urlOverride="" \
                   --set docker.repository=${full_repo} \
                   --set docker.tag=$TAG_TO_USE)
+    #                  --set deployment.strategy.rollingUpdate.maxSurge=100)
     logit "$result"
 }
 
-# Get tags for repo
-# e.g.--> h.get.tags docker tenant-service
-h.get.tags() {
-    repo_name="$1"
-    service_name="$2"
-
-    if [[ "$1" == "-h" ]]; then
-        echo "Usage: $0 [repo name] [service name]"
-        echo "Get list of tags for a repo and service name" 
-        echo ""
-        echo "$0 tenant-service tenant-service"
-        echo "$0 docker tenant-service"
-        return 1
-    fi
-
-    LATEST=$(curl -H "accept: application/json" -L -s -q -k -X GET \
-                  "harbor.k8s.platform.einstein.com/api/repositories/${repo_name}/${service_name}/tags" \
-                 | jq -r ".[] | [.name] | .[]" | sort -V)
-
-    echo "$LATEST"
-}
 
 k.get.namespace () {
     namespace=$(kubectl config view --minify | grep namespace | awk '{print $2}')
     echo "$namespace"
 }
 
+# Deploy application service via helm chart
+# uses docker repo
+h.deploy.application () {
+    namespace=$(k.get.namespace)
+    application_name="${namespace}-application"
+
+    if [[ "$1" == "-h" ]]; then
+        echo "Usage: $0 <helm name> <tag name>"
+        echo ""
+        echo "Deploy from the 'docker' repo"
+        echo ""
+        echo "Defaults to helm name of '$application_name'"
+        echo "Defaults to using latest tag"
+        echo ""
+        echo "Example:"
+        echo "$0 <super-helm-name> <2020.05.21.16>"
+        return 1
+    fi
+
+    if [[ ! -z "$1" ]]; then
+        application_name=$1
+    fi
+    image_tag=$2
+
+    _h.deploy.application "$application_name" "docker" "application-db.dev.platform.einstein.com" "${image_tag}"
+}
 # Deploy application service via helm chart
 h.deploy.application.dev () {
     namespace=$(k.get.namespace)
@@ -382,6 +444,7 @@ h.deploy.application.dev () {
         echo "Defaults to helm name of '$application_name'"
         echo "Defaults to using latest tag"
         echo ""
+        echo "Example:"
         echo "$0 <super-helm-name> <2020.05.21.16>"
         return 1
     fi
@@ -410,6 +473,7 @@ h.deploy.application.dev.db () {
         echo "Defaults to helm name of '$application_name'"
         echo "Defaults to using latest tag."
         echo ""
+        echo "Example:"
         echo "$0 <super-helm-name> <2020.05.21.16>"
         return 1
     fi
@@ -451,8 +515,8 @@ _h.deploy.application () {
         TAG_TO_USE="$image_tag"
     else
         TAG_TO_USE=$(curl -H "accept: application/json" -L -s -q -k -X GET \
-                          "harbor.k8s.platform.einstein.com/api/repositories/${repo_name}/${service_name}/tags" \
-                         | jq -r ".[] | [.name] | .[]" | sort -V | grep -v SNAPSHOT | tail -1)
+                          "harbor.k8s.platform.einstein.com/v2/${repo_name}/${service_name}/tags/list" \
+                         | jq -r ".tags | .[]" | grep -v SNAPSHOT | grep -v ai | sort -V | tail -1 )
     fi
 
     dev_yaml="${git_root}/ep-api/values/dev-usw2.yaml"
@@ -460,7 +524,7 @@ _h.deploy.application () {
     # Upgrade
     logit "Deploying ${helm_name} with 'application-service:${TAG_TO_USE}'"
     logit ""
-    logit "helm upgrade --install $helm_name prod/ep-common -f ${dev_yaml} --set appConfigs.environ.EINSTEIN1_DATABASE_URL=${database_url} --set appName=${helm_name} --set docker.tag=$TAG_TO_USE --set docker.repository=${full_repo}"
+    logit "helm upgrade --install $helm_name prod/ep-common -f ${dev_yaml} --set ingress.urlOverride='' --set appConfigs.environ.EINSTEIN1_DATABASE_URL=${database_url} --set appName=${helm_name} --set docker.tag=$TAG_TO_USE --set docker.repository=${full_repo} --set deployment.strategy.rollingUpdate.maxSurge=100"
     logit ""
 
     result=$(helm upgrade --install $helm_name \
@@ -468,8 +532,10 @@ _h.deploy.application () {
                   -f ${dev_yaml}  \
                   --set appConfigs.environ.EINSTEIN1_DATABASE_URL="${database_url}" \
                   --set appName=${helm_name} \
+                  --set ingress.urlOverride="" \
                   --set docker.repository=${full_repo} \
                   --set docker.tag=$TAG_TO_USE)
+##                  --set deployment.strategy.rollingUpdate.maxSurge=100)
     logit "$result"
 }
 
