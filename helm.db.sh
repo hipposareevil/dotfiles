@@ -10,6 +10,82 @@ k.get.rds.password() {
     export RDS_PASSWORD
 }
 
+# Dump the DB info from k8s db
+k.dump.db() {
+    namespace=$(kubectl config view --minify | grep namespace | awk '{print $2}')
+    db_name="${namespace}-app-db"
+    database_url="${db_name}-postgresql"
+
+    if [[ "$1" == "-h" ]]; then
+        echo "Usage: $0"
+        echo "Dump the Postgres DB '${db_name}' into file 'dump'"
+        return 1
+    fi
+
+    echo "Getting password from '$VAULT_ADDRESS'"
+    VAULT_PASSWORD=$(vault read -address=${VAULT_ADDRESS} secret/application-service/rds_password -format=json | jq -r .data.secret)
+    if [ $? -ne 0 ]; then
+        echo "*****"
+        echo "Unable to read from vault:"
+        echo "$VAULT_PASSWORD"
+        echo ""
+        echo "Run 'vault.login'"
+        echo "*****"
+    fi
+
+    echo "Creating container to dump the database '${database_url}' as 'application_dev'"
+    kubectl run "${namespace}-db-client-dump" \
+            --rm --tty -i \
+            --restart='Never' \
+            --namespace "${namespace}" \
+            --image docker.io/bitnami/postgresql:10.13.0 \
+            --env="PGPASSWORD=$VAULT_PASSWORD" \
+            --command -- pg_dump \
+            --host ${database_url} \
+            -U application_dev \
+            -d application \
+            -p 5432 \
+            > dump
+}
+
+
+# Dump the DB info from RDS db
+k.dump.real.db() {
+    namespace=$(kubectl config view --minify | grep namespace | awk '{print $2}')
+    database_url="application-db.dev.platform.einstein.com"
+
+    if [[ "$1" == "-h" ]]; then
+        echo "Usage: $0"
+        echo "Dump the Postgres DB '${database_url}' into file 'dump.rds'"
+        return 1
+    fi
+
+    echo "Getting password from '$VAULT_ADDRESS'"
+    VAULT_PASSWORD=$(vault read -address=${VAULT_ADDRESS} secret/application-service/rds_password -format=json | jq -r .data.secret)
+    if [ $? -ne 0 ]; then
+        echo "*****"
+        echo "Unable to read from vault:"
+        echo "$VAULT_PASSWORD"
+        echo ""
+        echo "Run 'vault.login'"
+        echo "*****"
+    fi
+
+    echo "Creating container to dump the database '${database_url}' as 'application_dev'"
+    kubectl run "${namespace}-db-client-dump" \
+            --rm --tty -i \
+            --restart='Never' \
+            --namespace "${namespace}" \
+            --image docker.io/bitnami/postgresql:10.9.0 \
+            --env="PGPASSWORD=$VAULT_PASSWORD" \
+            --command -- pg_dumpall \
+            --host ${database_url} \
+            -U application_dev \
+            -d application \
+            -p 5432 \
+            > dump.rds
+}
+
 
 # Get into k8s db
 k.exec.db () {
@@ -81,7 +157,7 @@ k.exec.real.db () {
             --rm --tty -i \
             --restart='Never' \
             --namespace "${namespace}" \
-            --image docker.io/bitnami/postgresql:10.13.0 \
+            --image docker.io/bitnami/postgresql:10.9.0 \
             --env="PGPASSWORD=$VAULT_PASSWORD" \
             --command -- psql \
             --host ${database_url} \

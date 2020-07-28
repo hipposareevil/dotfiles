@@ -93,6 +93,45 @@ prompt_context() {
 }
 
 
+# like git rev-parse for our backup strategy
+_find_source_root() {
+    what_to_find=".backup.directory"
+
+    path=$PWD
+    while [[ "$path" != "" && ! -e "$path/$what_to_find" ]]; do
+        path=${path%/*}
+    done
+    echo "$path"
+}
+
+
+# If directory is under backup control, add a thumbs up or down
+prompt_backup() {
+    real_root=$(_find_source_root)
+    if [ ! -z "$real_root" ]; then
+        # find pid file
+        pid_file=${real_root}/.backup.directory/.pid
+        if [ -e $pid_file ]; then
+            pid=$(cat $pid_file)
+            result=$(ps -elf | grep $pid | grep -v grep | wc -l)
+            return_code=$?
+
+            if [ $result -eq 0 ]; then
+                # backup not running
+                echo -n " 👎"
+            else
+                # backup running
+                # thumbs up
+                echo -n " 👍"
+            fi
+
+        else
+            echo -n " 👎"
+        fi
+    fi
+}
+
+
 prompt_git() {
   local ref dirty
   if $(git rev-parse --is-inside-work-tree >/dev/null 2>&1); then
@@ -321,7 +360,10 @@ build_prompt() {
 #  prompt_virtualenv
 #  prompt_context
   prompt_git
+
   prompt_dir
+  prompt_backup
+
   prompt_end
 }
 

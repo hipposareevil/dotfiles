@@ -3,6 +3,8 @@ alias g.pull="git pull"
 alias g.master="git checkout master"
 alias g.log="git shortlog --summary --numbered"
 
+alias g.get.remote.tags="git ls-remote --tags origin"
+
 # Get commit for tag and show logs
 function g.get.tag() {
     if [ -z "$1" ]

@@ -5,7 +5,8 @@
 
 VAULT_ADDRESS="https://vault.dev.platform.einstein.com"
 
-. ./helm.db.sh
+drop_dot_dir=$(dirname $0)
+source ${drop_dot_dir}/helm.db.sh
 
 logit() {
     if [ -z $1 ]; then
@@ -98,7 +99,7 @@ _h.add.prod.repo () {
     if [ $? -eq 0 ]; then
         logit "'prod' already in helm repo"
     else
-        helm repo add prod https://harbor.k8s.platformq.einstein.com/chartrepo/prod
+        helm repo add prod https://harbor.k8s.platform.einstein.com/chartrepo/prod
     fi
 }
 
@@ -134,7 +135,7 @@ h.deploy.tenant () {
 # Deploy tenant via helm chart
 # deploy with repo 'tenant-service'
 h.deploy.tenant.dev () {
-    namespace=$(k.get.namespace)
+    namespace=$(k.get.namespace)o
     application_name="${namespace}-tenant"
 
     if [[ "$1" == "-h" ]]; then
@@ -195,6 +196,7 @@ _h.deploy.tenant () {
     database_url="$3"
     image_tag="$4"
 
+    namespace=$(k.get.namespace)
     service_name="tenant-service"
     full_repo="harbor.k8s.platform.einstein.com/${repo_name}"
 
@@ -224,22 +226,28 @@ _h.deploy.tenant () {
     logit "Creating helm chart: $helm_name"
     logit "Using tag: $TAG_TO_USE"
 
+    # take dev yaml and make a version without the extraIngress
     dev_yaml="${git_root}/ep-tenant/values/dev-usw2.yaml"
+    new_yaml="/tmp/tenant-dev-usw2.yaml"
+    sed '/extraIngress/,$d' $dev_yaml > $new_yaml
 
     # Upgrade
-    logit "helm upgrade --install $helm_name prod/ep-common -f ${dev_yaml} --set ingress.urlOverride='' --set appConfigs.environ.EINSTEIN1_DATABASE_URL=${database_url} --set appName=${helm_name} --set docker.tag=$TAG_TO_USE --set docker.repository=${full_repo}"
+    logit "helm upgrade --install $helm_name prod/ep-common -f ${new_yaml} --set ingress.urlOverride='' --set appConfigs.environ.EINSTEIN1_DATABASE_URL=${database_url} --set appName=${helm_name} --set docker.tag=$TAG_TO_USE --set docker.repository=${full_repo}"
     logit ""
     logit "Deploying ${helm_name} with 'tenant-service:${TAG_TO_USE}'"
     logit ""
 
+set -x
+
     result=$(helm upgrade --install $helm_name \
                   prod/ep-common \
                   --set appConfigs.environ.EINSTEIN1_DATABASE_URL="${database_url}" \
-                  -f ${dev_yaml} \
+                  -f ${new_yaml} \
                   --set appName=${helm_name} \
                   --set ingress.urlOverride="" \
                   --set docker.repository=${full_repo} \
                   --set docker.tag=$TAG_TO_USE)
+set +x
     logit "$result"
 }
 

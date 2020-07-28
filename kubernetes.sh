@@ -66,6 +66,24 @@ k.get.tags() {
     echo "$LATEST"
 }
 
+k.get.tags.app.dev() {
+    echo "Getting developer tags"
+    echo "----------------------"
+    k.get.tags application-service application-service | grep -v ai 
+}
+
+k.get.tags.app() {
+    echo "Getting normal tags"
+    echo "-------------------"
+    k.get.tags docker application-service | grep -v ai 
+}
+
+k.get.tags.tenant() {
+    echo "Getting normal tags"
+    echo "-------------------"
+    k.get.tags docker tenant-service | grep -v ai 
+}
+
 
 # Get current namespace
 k.get.namespace () {
@@ -125,8 +143,11 @@ k.get.pods () {
 
 # get ingresses
 k.get.ingress () {
-    log "k get ingress"
-    ingress=$(kubectl get ingress)
+    # get header
+    kubectl get ingress | head -1
+
+    # get remaining and then sort
+    ingress=$(kubectl get ingress | tail -n +2 |  sort -k 2)
     echo "${ingress}"
 }
 
