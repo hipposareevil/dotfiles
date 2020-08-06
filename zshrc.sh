@@ -125,36 +125,6 @@ function lsz() {
 }
 
 
-###################
-## proxy
-
-function proxy() {
-
-export HTTPS_PROXY=http://www-proxy-hqdc.us.oracle.com:80
-export HTTP_PROXY=http://www-proxy-hqdc.us.oracle.com:80
-export NO_PROXY=localhost,127.0.0.1,.us.oracle.com,.oraclecorp.com,/var/run/docker.sock,.grungy.us
-
-export http_proxy=http://www-proxy-hqdc.us.oracle.com:80
-export https_proxy=http://www-proxy-hqdc.us.oracle.com:80
-export no_proxy=localhost,127.0.0.1,.us.oracle.com,.oraclecorp.com,/var/run/docker.sock,.grungy.us
-
-  git config --global http.proxy http://rmdc-proxy.oracle.com:80
-  git config --global https.proxy http://rmdc-proxy.oracle.com:80
-  ALL_PROXY=$http_proxy
-}
-
-function unproxy() {
-   unset https_proxy
-   unset http_proxy
-   unset HTTPS_PROXY
-   unset HTTP_PROXY
-   ALL_PROXY=""
-   git config --global --unset https.proxy
-   git config --global --unset http.proxy
-}
-
-## end proxy
-###################
 
 # BD reverse cd
 . $drop_dot_dir/.zsh/plugins/bd/bd.zsh
@@ -229,35 +199,4 @@ source $drop_dot_dir/helm.db.sh
 
 # work
 source $drop_dot_dir/work.dad.sh
-
-#######
-# maven
-function m.core {
-    echo "Changing maven for core."
-    cp ~/.m2/settings.xml.core  ~/.m2/settings.xml
-}
-
-function m.einstein {
-    echo "Changing maven for einstein."
-    cp ~/.m2/settings.xml.e1  ~/.m2/settings.xml
-}
-
-
-
-vaultsel () {
-	local vaults vault_ldap_user
-	vault_ldap_user="samuel.jackson" 
-	vaults=("https://vault-ops.build-usw2.platform.einstein.com" "https://vault.build-usw2.platform.einstein.com" "https://vault.dev.platform.einstein.com" "https://vault.staging.platform.einstein.com" "https://vault.rc.platform.einstein.com" "https://vault.prod.platform.einstein.com" "https://vault.rc-euc1.platform.einstein.com" "https://vault.prod-euc1.platform.einstein.com" "https://vault.perf-usw2.platform.einstein.com") 
-	VAULT_ADDR=$(printf '%s\n' "${vaults[@]}" | fzf) 
-	export VAULT_ADDR
-	unset VAULT_TOKEN
-	if ! vault token lookup > /dev/null 2>&1
-	then
-		vault login -no-print -method="ldap" username="$vault_ldap_user"
-	fi
-	VAULT_TOKEN=$(vault print token) 
-	export VAULT_TOKEN
-	echo "Switched to Vault cluster \"${VAULT_ADDR}\""
-}
-
-
+source $drop_dot_dir/work.sh

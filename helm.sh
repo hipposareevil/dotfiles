@@ -232,7 +232,7 @@ _h.deploy.tenant () {
     sed '/extraIngress/,$d' $dev_yaml > $new_yaml
 
     # Upgrade
-    logit "helm upgrade --install $helm_name prod/ep-common -f ${new_yaml} --set ingress.urlOverride='' --set appConfigs.environ.EINSTEIN1_DATABASE_URL=${database_url} --set appName=${helm_name} --set docker.tag=$TAG_TO_USE --set docker.repository=${full_repo}"
+    logit "helm upgrade --install $helm_name prod/ep-common -f ${new_yaml} --set ingress.urlOverride='' --set appConfigs.environ.EINSTEIN1_DATABASE_URL=${database_url} --set appName=${helm_name} --set docker.tag=$TAG_TO_USE --set docker.repository=${full_repo} --set appConfigs.annotations.\"sumologic\.com/exclude\"=\"true\""
     logit ""
     logit "Deploying ${helm_name} with 'tenant-service:${TAG_TO_USE}'"
     logit ""
@@ -246,7 +246,8 @@ set -x
                   --set appName=${helm_name} \
                   --set ingress.urlOverride="" \
                   --set docker.repository=${full_repo} \
-                  --set docker.tag=$TAG_TO_USE)
+                  --set docker.tag=$TAG_TO_USE \
+                  --set appConfigs.annotations."sumologic\.com/exclude"="true")
 set +x
     logit "$result"
 }
@@ -408,7 +409,7 @@ _h.deploy.application () {
     # Upgrade
     logit "Deploying ${helm_name} with 'application-service:${TAG_TO_USE}'"
     logit ""
-    logit "helm upgrade --install $helm_name prod/ep-common -f ${dev_yaml} --set ingress.urlOverride='' --set appConfigs.environ.EINSTEIN1_DATABASE_URL=${database_url} --set appName=${helm_name} --set docker.tag=$TAG_TO_USE --set docker.repository=${full_repo}"
+    logit "helm upgrade --install $helm_name prod/ep-common -f ${dev_yaml} --set ingress.urlOverride='' --set appConfigs.environ.EINSTEIN1_DATABASE_URL=${database_url} --set appName=${helm_name} --set docker.tag=$TAG_TO_USE --set docker.repository=${full_repo} --set appConfigs.annotations.\"sumologic\.com/exclude\"=\"true\""
     logit ""
 
     result=$(helm upgrade --install $helm_name \
@@ -418,7 +419,8 @@ _h.deploy.application () {
                   --set appName=${helm_name} \
                   --set ingress.urlOverride="" \
                   --set docker.repository=${full_repo} \
-                  --set docker.tag=$TAG_TO_USE)
+                  --set docker.tag=$TAG_TO_USE \
+                  --set appConfigs.annotations."sumologic\.com/exclude"="true")
     logit "$result"
 }
 
