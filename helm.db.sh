@@ -3,6 +3,22 @@
 # 
 ###############
 
+# Not kubernetes, but used by db
+vault.login() {
+    if [[ "$1" == "-h" ]]; then
+        echo "Usage: $0 <username>"
+        echo ""
+        echo "Log into vault with username"
+        return 1
+    fi
+
+    user=$1
+
+    echo "Logging into vault '$VAULT_ADDRESS' as user '$user'"
+
+    vault login -address=${VAULT_ADDRESS} -method=ldap username=${user}
+}
+
 
 # Get RDS password from vault 
 k.get.rds.password() {

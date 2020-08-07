@@ -129,9 +129,16 @@ function _k.get.pods.header() {
     k get pods -o wide | head -1
 }
 
+# Watch pods
+k.watch.pods () {
+    watch kubectl get pods
+    # spit out pods after watch is done
+    k.get.pods
+}
+
+
 # Get all pods 
 k.get.pods () {
-#    log "k get pods -o wide"
     pods=$(kubectl get pods -o wide)
     if [ ! -z $1 ]; then
         _k.get.pods.header

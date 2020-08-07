@@ -62,25 +62,17 @@ h.get.repo () {
     echo "$results"
 }
 
-# Not kubernetes, but used by db
-vault.login() {
-    if [[ "$1" == "-h" ]]; then
-        echo "Usage: $0 <username>"
-        echo ""
-        echo "Log into vault with username"
-        return 1
-    fi
 
-    user=$1
-
-    echo "Logging into vault '$VAULT_ADDRESS' as user '$user'"
-
-    vault login -address=${VAULT_ADDRESS} -method=ldap username=${user}
+#####
+# Get namespace name
+# 
+#####
+k.get.namespace () {
+    namespace=$(kubectl config view --minify | grep namespace | awk '{print $2}')
+    echo "$namespace"
 }
 
-
-
-# Annotate the namespace so vault will work
+# Annotate the namespace so we can connect to vault
 _h.annotate () {
     namespace=$(k.get.namespace)
     exists=$(k describe namespace ${namespace} | grep Annotations | grep "iam.amazonaws.com/permitted")
@@ -92,7 +84,7 @@ _h.annotate () {
     fi
 }
 
-# Validate helm repo
+# Validate (and add) helm repo
 _h.add.prod.repo () {
     logit "Add 'prod' to helm repo"
     exists=$(helm repo list | grep "harbor.k8s.platform.einstein.com/chartrepo/prod")
@@ -104,101 +96,86 @@ _h.add.prod.repo () {
 }
 
 
-# Deploy tenant via helm chart
-# deploy with repo 'docker'
+
+
+########
+# Deploy tenant service via helm chart
+########
 h.deploy.tenant () {
-    namespace=$(k.get.namespace)
-    application_name="${namespace}-tenant"
+    _h.deploy.service "tenant" "$@"
+}
 
-    if [[ "$1" == "-h" ]]; then
-        echo "Usage: $0 [helm name] <tag name>"
-        echo ""
-        echo "Deploy from the 'docker' repo"
-        echo ""
-        echo "Defaults to helm name of '$application_name'"
-        echo "Defaults to using latest tag"
-        echo ""
-        echo "Example:"
-        echo "$0 <super-helm-name> <2020.06.11.5>"
-        return 1
-    fi
-
-    if [[ ! -z "$1" ]]; then
-        application_name=$1
-    fi
-    image_tag=$2
-
-    _h.deploy.tenant "$application_name" "docker" "application-db.dev.platform.einstein.com" "${image_tag}"
+########
+# Deploy application service via helm chart
+########
+h.deploy.application () {
+    _h.deploy.service "application" "$@"
 }
 
 
-# Deploy tenant via helm chart
-# deploy with repo 'tenant-service'
-h.deploy.tenant.dev () {
-    namespace=$(k.get.namespace)o
-    application_name="${namespace}-tenant"
-
-    if [[ "$1" == "-h" ]]; then
-        echo "Usage: $0 [helm name] <tag name>"
-        echo ""
-        echo "Deploy from the 'tenant-service' repo"
-        echo ""
-        echo "Defaults to helm name of '$application_name'"
-        echo "Defaults to using latest tag"
-        echo ""
-        echo "Example:"
-        echo "$0 <super-helm-name> <2020.06.11.5>"
-        return 1
+#########
+# Deploy a service
+#
+# params:
+# 1- application or tenant service name
+#########
+_h.deploy.service () {
+    # Service name (application or tenant)
+    service_name=$1
+    shift
+    if [[ $service_name == "application" ]]; then
+        helm_subdir="ep-api"
+    else
+        helm_subdir="ep-tenant"
     fi
 
-    if [[ ! -z "$1" ]]; then
-        application_name=$1
-    fi
-    image_tag=$2
-
-    _h.deploy.tenant "$application_name" "tenant-service" "application-db.dev.platform.einstein.com" "${image_tag}"
-}
-
-
-# deploy with repo 'tenant-service' and DB
-h.deploy.tenant.dev.db () {
+    # init vars with defaults
     namespace=$(k.get.namespace)
-    application_name="${namespace}-tenant"
-    db_name="${namespace}-app-db-postgresql"
+    helm_name="${namespace}-${service_name}"
+    # which repo, 'docker' or developer version (application-service/tenant-service)
+    docker_repo="docker"
+    send_logs=0
+    image_tag=""
+    database_url="application-db.dev.platform.einstein.com"
 
-    if [[ "$1" == "-h" ]]; then
-        echo "Usage: $0 [helm name] <tag name>"
-        echo ""
-        echo "Deploy from the 'tenant-service' repo"
-        echo "Will use the k8s database instead of RDS."
-        echo "(Run 'h.deploy.database' to create one.)"
-        echo ""
-        echo "Defaults to helm name of '$application_name'"
-        echo "Defaults to using latest tag"
-        echo ""
-        echo "Example:"
-        echo "$0 <super-helm-name> <2020.06.11.5>"
-        return 1
-    fi
+    # parse options
+    POSITIONAL=()
+    while [[ $# -gt 0 ]]
+    do
+        key="$1"
+        case $key in
+            -h|--help|\?)
+                _h.deploy.help "h.deploy.${service_name}" "${service_name}"
+                shift
+                return 1
+                ;;
+            -n|--name)
+                helm_name="$2"
+                shift 2
+                ;;
+            -t|--tag)
+                image_tag="$2"
+                shift 2
+                ;;
+            -db)
+                database_url="${namespace}-app-db-postgresql"                
+                shift
+                ;;
+            -d|--dev)
+                docker_repo="${service_name}-service"
+                shift
+                ;;
+            -l|--logs)
+                send_logs=1
+                shift
+                ;;
 
-    if [[ ! -z "$1" ]]; then
-        application_name=$1
-    fi
-    image_tag=$2
+        esac
+    done
+    set -- "${POSITIONAL[@]}" # restore positional parameters
 
-    _h.deploy.tenant "$application_name" "tenant-service" "${db_name}" "${image_tag}"
-}
-
-
-_h.deploy.tenant () {
-    helm_name="$1"
-    repo_name="$2"
-    database_url="$3"
-    image_tag="$4"
-
-    namespace=$(k.get.namespace)
-    service_name="tenant-service"
-    full_repo="harbor.k8s.platform.einstein.com/${repo_name}"
+    #######
+    # Do work
 
     # validate we are in correct repo
     git_remote=$(git remote -v 2>&1 | head -1)
@@ -206,210 +183,43 @@ _h.deploy.tenant () {
         echo "Must be in the helm git repo directory: 'github.com/einsteinplatform/helm.git'"
         return 1
     fi
+    # get root of repo
+    git_root=$(git rev-parse --show-toplevel)
 
     # validate the annotations & repo
     _h.annotate
     _h.add.prod.repo
 
-    # get root of repo
-    git_root=$(git rev-parse --show-toplevel)
+    # name of service in repo
+    docker_service_name="${service_name}-service"
+    # full harbor repo
+    full_repo="harbor.k8s.platform.einstein.com/${docker_repo}"
 
-    # Get latest version
+    # Determine tag to use. If not passed in, get latest from repo
     if [ ! -z "$image_tag" ]; then
         TAG_TO_USE="$image_tag"
     else
         TAG_TO_USE=$(curl -H "accept: application/json" -L -s -q -k -X GET \
-                          "harbor.k8s.platform.einstein.com/v2/${repo_name}/${service_name}/tags/list" \
+                          "harbor.k8s.platform.einstein.com/v2/${docker_repo}/${docker_service_name}/tags/list" \
                          | jq -r ".tags | .[]" | grep -v SNAPSHOT | grep -v ai | sort -V | tail -1 )
     fi
 
-    logit "Creating helm chart: $helm_name"
-    logit "Using tag: $TAG_TO_USE"
-
-    # take dev yaml and make a version without the extraIngress
-    dev_yaml="${git_root}/ep-tenant/values/dev-usw2.yaml"
-    new_yaml="/tmp/tenant-dev-usw2.yaml"
+    # Grab the dev yaml and make a version without the extraIngress
+    dev_yaml="${git_root}/${helm_subdir}/values/dev-usw2.yaml"
+    new_yaml="/tmp/dev-usw2.yaml"
     sed '/extraIngress/,$d' $dev_yaml > $new_yaml
 
     # Upgrade
-    logit "helm upgrade --install $helm_name prod/ep-common -f ${new_yaml} --set ingress.urlOverride='' --set appConfigs.environ.EINSTEIN1_DATABASE_URL=${database_url} --set appName=${helm_name} --set docker.tag=$TAG_TO_USE --set docker.repository=${full_repo} --set appConfigs.annotations.\"sumologic\.com/exclude\"=\"true\""
-    logit ""
-    logit "Deploying ${helm_name} with 'tenant-service:${TAG_TO_USE}'"
-    logit ""
-
-set -x
-
-    result=$(helm upgrade --install $helm_name \
-                  prod/ep-common \
-                  --set appConfigs.environ.EINSTEIN1_DATABASE_URL="${database_url}" \
-                  -f ${new_yaml} \
-                  --set appName=${helm_name} \
-                  --set ingress.urlOverride="" \
-                  --set docker.repository=${full_repo} \
-                  --set docker.tag=$TAG_TO_USE \
-                  --set appConfigs.annotations."sumologic\.com/exclude"="true")
-set +x
-    logit "$result"
-}
-
-
-k.get.namespace () {
-    namespace=$(kubectl config view --minify | grep namespace | awk '{print $2}')
-    echo "$namespace"
-}
-
-# Deploy application service via helm chart
-# uses docker repo
-h.deploy.application () {
-    namespace=$(k.get.namespace)
-    application_name="${namespace}-application"
-
-    if [[ "$1" == "-h" ]]; then
-        echo "Usage: $0 <helm name> <tag name>"
-        echo ""
-        echo "Deploy from the 'docker' repo"
-        echo ""
-        echo "Defaults to helm name of '$application_name'"
-        echo "Defaults to using latest tag"
-        echo ""
-        echo "Example:"
-        echo "$0 <super-helm-name> <2020.05.21.16>"
-        return 1
-    fi
-
-    if [[ ! -z "$1" ]]; then
-        application_name=$1
-    fi
-    image_tag=$2
-
-    _h.deploy.application "$application_name" "docker" "application-db.dev.platform.einstein.com" "${image_tag}"
-}
-# Deploy application service via helm chart
-h.deploy.application.dev () {
-    namespace=$(k.get.namespace)
-    application_name="${namespace}-application"
-
-    if [[ "$1" == "-h" ]]; then
-        echo "Usage: $0 <helm name> <tag name>"
-        echo ""
-        echo "Deploy from the 'application-service' repo"
-        echo ""
-        echo "Defaults to helm name of '$application_name'"
-        echo "Defaults to using latest tag"
-        echo ""
-        echo "Example:"
-        echo "$0 <super-helm-name> <2020.05.21.16>"
-        return 1
-    fi
-
-    if [[ ! -z "$1" ]]; then
-        application_name=$1
-    fi
-    image_tag=$2
-
-    _h.deploy.application "$application_name" "application-service" "application-db.dev.platform.einstein.com" "${image_tag}"
-}
-
-# deploy with repo 'application-service' and use local db
-h.deploy.application.dev.db () {
-    namespace=$(k.get.namespace)
-    application_name="${namespace}-application"
-    db_name="${namespace}-app-db-postgresql"
-
-    if [[ "$1" == "-h" ]]; then
-        echo "Usage: $0 <helm name> <tag name>"
-        echo ""
-        echo "Deploys Application Service from the 'application-service' repo."
-        echo "Will use the k8s database instead of RDS."
-        echo "(Run 'h.deploy.database' to create one.)"
-        echo ""
-        echo "Defaults to helm name of '$application_name'"
-        echo "Defaults to using latest tag."
-        echo ""
-        echo "Example:"
-        echo "$0 <super-helm-name> <2020.05.21.16>"
-        return 1
-    fi
-
-    if [[ ! -z "$1" ]]; then
-        application_name=$1
-    fi
-    image_tag=$2
-
-    _h.deploy.application "${application_name}" "application-service" "${db_name}" "${image_tag}"
-}
-
-
-
-# deploy with repo 'docker' and use local db
-h.deploy.application.db () {
-    namespace=$(k.get.namespace)
-    application_name="${namespace}-application"
-    db_name="${namespace}-app-db-postgresql"
-
-    if [[ "$1" == "-h" ]]; then
-        echo "Usage: $0 <helm name> <tag name>"
-        echo ""
-        echo "Deploys Application Service from the 'docker' repo."
-        echo "Will use the k8s database instead of RDS."
-        echo "(Run 'h.deploy.database' to create one.)"
-        echo ""
-        echo "Defaults to helm name of '$application_name'"
-        echo "Defaults to using latest tag."
-        echo ""
-        echo "Example:"
-        echo "$0 <super-helm-name> <2020.05.21.16>"
-        return 1
-    fi
-
-    if [[ ! -z "$1" ]]; then
-        application_name=$1
-    fi
-    image_tag=$2
-
-    _h.deploy.application "${application_name}" "docker" "${db_name}" "${image_tag}"
-}
-
-
-
-_h.deploy.application () {
-    helm_name="$1"
-    repo_name="$2"
-    database_url="$3"
-    image_tag="$4"
-
-    service_name="application-service"
-    full_repo="harbor.k8s.platform.einstein.com/${repo_name}"
-
-    # validate we are in correct repo
-    git_remote=$(git remote -v 2>&1 | head -1)
-    if [[ $git_remote != *"einsteinplatform/helm.git"* ]]; then
-        echo "Must be in the helm git repo directory: 'github.com/einsteinplatform/helm.git'"
-        return 1
-    fi
-
-    # get root of repo
-    git_root=$(git rev-parse --show-toplevel)
-
-    # validate the annotations & repo
-    _h.annotate
-    _h.add.prod.repo
-
-    # Get latest version
-    if [ ! -z "$image_tag" ]; then
-        TAG_TO_USE="$image_tag"
+    # send logs to sumo? default to no
+    if [ $send_logs -eq 1 ]; then
+        annotation=""
     else
-        TAG_TO_USE=$(curl -H "accept: application/json" -L -s -q -k -X GET \
-                          "harbor.k8s.platform.einstein.com/v2/${repo_name}/${service_name}/tags/list" \
-                         | jq -r ".tags | .[]" | grep -v SNAPSHOT | grep -v ai | sort -V | tail -1 )
+        annotation="--set appConfigs.annotations.\"sumologic\.com/exclude\"=\"true\""
     fi
 
-    dev_yaml="${git_root}/ep-api/values/dev-usw2.yaml"
-
-    # Upgrade
-    logit "Deploying ${helm_name} with 'application-service:${TAG_TO_USE}'"
+    logit "Deploying ${helm_name} with '${docker_repo}/${docker_service_name}:${TAG_TO_USE}'"
     logit ""
-    logit "helm upgrade --install $helm_name prod/ep-common -f ${dev_yaml} --set ingress.urlOverride='' --set appConfigs.environ.EINSTEIN1_DATABASE_URL=${database_url} --set appName=${helm_name} --set docker.tag=$TAG_TO_USE --set docker.repository=${full_repo} --set appConfigs.annotations.\"sumologic\.com/exclude\"=\"true\""
+    logit "helm upgrade --install $helm_name prod/ep-common -f ${dev_yaml} --set ingress.urlOverride='' --set appConfigs.environ.EINSTEIN1_DATABASE_URL=${database_url} --set appName=${helm_name} --set docker.tag=$TAG_TO_USE --set docker.repository=${full_repo} ${annotation}"
     logit ""
 
     result=$(helm upgrade --install $helm_name \
@@ -420,8 +230,44 @@ _h.deploy.application () {
                   --set ingress.urlOverride="" \
                   --set docker.repository=${full_repo} \
                   --set docker.tag=$TAG_TO_USE \
-                  --set appConfigs.annotations."sumologic\.com/exclude"="true")
+                  ${annotations} )
     logit "$result"
 }
 
 
+#####
+# Print out deploy help
+#
+#
+# params:
+# 1- Calling script name
+# 2- service name (tenant or application)
+#####
+_h.deploy.help () {
+    script_name=$1
+    service=$2
+
+    namespace=$(k.get.namespace)
+    service_name="${namespace}-${service}"
+
+    capitalized_service="$(tr '[:lower:]' '[:upper:]' <<< ${service:0:1})${service:1}"
+
+
+    echo "Deploy ${capitalized_service} Service from Harbor's 'docker' repo to your namespace."
+    echo "Default action is to not forward logs to sumologic. "
+    echo ""
+    echo "Usage: $script_name [-n helm_name] [-t tag_name] [-db] [-d] [-l]"
+    echo ""
+    echo "Options: "
+    echo "   -n/--name  helm_name - Set Helm name. Defaults to name of '${service_name}'"
+    echo "   -t/--tag   tag_name  - Docker image tag. Defaults to the lastest in 'docker' repo"
+    echo "   -db        Use k8s database instead of RDS. (run 'h.deploy.database' to create one)"
+    echo "   -d/--dev   Use developer git repo '${service}-service' instead of 'docker'"
+    echo "   -l/--logs  Send logs to sumologic"
+    echo ""
+    echo "Examplse:"
+    echo "${script_name} -n super-funk -t 2020.05.21.16"
+    echo "   helm name of super-funk using 2020.05.21.16 tag in docker repo"
+    echo "${script_name} -l"
+    echo "   helm name of ${service_name}, using latest tag, send logs to sumo."
+}
