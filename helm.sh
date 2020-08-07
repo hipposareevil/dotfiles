@@ -260,7 +260,7 @@ _h.deploy.help () {
     echo ""
     echo "Options: "
     echo "   -n/--name  helm_name - Set Helm name. Defaults to name of '${service_name}'"
-    echo "   -t/--tag   tag_name  - Docker image tag. Defaults to the lastest in 'docker' repo"
+    echo "   -t/--tag   tag_name  - Docker image tag. Defaults to the latest in 'docker' repo"
     echo "   -d/--dev   Use developer git repo '${service}-service' instead of 'docker'"
     echo "   -l/--logs  Send logs to sumologic"
     echo "   -db        Use k8s database instead of RDS. (run 'h.deploy.database' to create one)"
