@@ -184,19 +184,21 @@ export LESS=' -R -X -F '
 # git
 source $drop_dot_dir/git.sh
 
-########
-# docker
-source $drop_dot_dir/docker.sh
 
-########
-# Kubernetes
-source $drop_dot_dir/kubernetes.sh
+######
+# Docker, etc
 
-########
-# Helm
-source $drop_dot_dir/helm.sh
-source $drop_dot_dir/helm.db.sh
+if [ -e "/work/git/devenv/hippos" ]; then
+    # load work files
+    source /work/git/devenv/hippos/main.sh
+    echo "[Loaded work dot files]"
+else
+    source $drop_dot_dir/docker.sh
+    source $drop_dot_dir/kubernetes.sh
+    source $drop_dot_dir/helm.sh
+    source $drop_dot_dir/helm.db.sh
+    source $drop_dot_dir/work.sh
+    echo "[Loaded icloud dotfiles]"
+fi
 
-# work
 source $drop_dot_dir/work.dad.sh
-source $drop_dot_dir/work.sh
