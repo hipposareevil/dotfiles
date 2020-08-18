@@ -1,6 +1,9 @@
-
 # root directory where we are located
 drop_dot_dir=$(dirname $0)
+
+export ZPLUG_HOME=/usr/local/opt/zplug
+source $ZPLUG_HOME/init.zsh
+
 
 function git_prompt_info() {
   ref=$(git symbolic-ref HEAD 2> /dev/null) || return
