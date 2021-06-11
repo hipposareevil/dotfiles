@@ -104,13 +104,29 @@ _find_source_root() {
     echo "$path"
 }
 
+DOWN="👎"
+UP="👍"
+OK="👌🏼"
+FINGER_DOWN="👇"
+WARNING="⚠️ "
+
 
 # If directory is under backup control, add a thumbs up or down
 prompt_backup() {
     real_root=$(_find_source_root)
     if [ ! -z "$real_root" ]; then
         # find pid file
-        pid_file=${real_root}/.backup.directory/.pid
+
+        backup_directory=${real_root}/.backup.directory
+        if [[ -L "$backup_directory" && -d "$backup_directory" ]]; then
+            # (old) soft link
+            pid_file=$backup_directory/.pid
+        else
+            # file with location
+            temp=$(cat $backup_directory)
+            pid_file="${temp}/.pid"
+        fi
+
         if [ -e $pid_file ]; then
             pid=$(cat $pid_file)
             result=$(ps -elf | grep $pid | grep -v grep | wc -l)
@@ -118,15 +134,18 @@ prompt_backup() {
 
             if [ $result -eq 0 ]; then
                 # backup not running
-                echo -n " 👎"
+                #                echo -n " 👎"
+                echo -n " $DOWN"
             else
                 # backup running
                 # thumbs up
-                echo -n " 👍"
+#                echo -n " 👍"
+                echo -n " $UP"
             fi
 
         else
-            echo -n " 👎"
+ #           echo -n " 👎"
+            echo -n " $DOWN"
         fi
     fi
 }
@@ -311,22 +330,43 @@ parse_kubeconfig() {
    if [[ ! -z $KUBECONFIG &&  -f $KUBECONFIG  ]]; then
        prompt_segment cyan black
 
-       # Get location
-       location=$(cat $KUBECONFIG | grep "current-context:" | sed "s/current-context: //")
- 
+       iam=$(whoami)
+
        # Get cluster name
        cluster_name=$(cat $KUBECONFIG | grep "current-context:" | sed "s/current-context: //")
 
-       if [[ $cluster_name == *"-"* ]]; then
-          cluster_name=$(echo "$cluster_name"  | awk -F - '{print $2"-"$3}')
+       # if cluster has username, it's most likely in einstein
+       if [[ "$cluster_name" == *"${iam}"* ]]
+       then
+           # Einstein
+           short_cluster_name=$(echo "$cluster_name"  | awk -F - '{print $2"-"$3}')
+           display_cluster_name="(einstein) $short_cluster_name"
+           display_namespace=$(cat $KUBECONFIG | grep -ws "cluster: ${short_cluster_name}" -A 2 | grep namespace | sed "s/namespace: //" | xargs)
+       elif [[ "$cluster_name" == *"minikube"* ]]
+       then
+           display_cluster_name="Minikube"
+           short_cluster_name="minikube"
+           display_namespace=$(cat $KUBECONFIG | grep -ws "cluster: ${short_cluster_name}" -A 2 | grep namespace | sed "s/namespace: //" | xargs)
+       elif [[ "$cluster_name" == *"388335517479"*  ]]
+       then
+           # Falcon DEV
+           display_cluster_name="(dev) "$(echo "$cluster_name" | awk -F: '{print $4}')
+           display_namespace=$(cat $KUBECONFIG | grep -ws "cluster: ${cluster_name}" -A 2 | grep namespace | sed "s/namespace: //" | xargs)
+       elif [[ "$cluster_name" == *"148587303401"*  ]]
+       then
+           # Falcon TEST1
+           display_cluster_name="(test1) "$(echo "$cluster_name" | awk -F: '{print $4}')
+           display_namespace=$(cat $KUBECONFIG | grep -ws "cluster: ${cluster_name}" -A 2 | grep namespace | sed "s/namespace: //" | xargs)
+       else
+           # Falcon
+           display_cluster_name="($cluster_name) "$(echo "$cluster_name" | awk -F: '{print $4}')
+           display_namespace=$(cat $KUBECONFIG | grep -ws "name: ${cluster_name}" -B 2 | grep namespace | sed "s/namespace: //" | xargs)
        fi
 
-       echo -n "<${cluster_name}>"
-       
-        # Get namespace
-       namespace=$(cat $KUBECONFIG | grep -ws "cluster: ${cluster_name}" -A 2 | grep namespace | sed "s/namespace: //" | xargs)
-#       namespace=$(grep "namespace" $KUBECONFIG | sed "s/namespace: //" | xargs)
-       echo -n " [${namespace}]"
+       # output
+       echo -n "<${display_cluster_name}>"
+       echo -n " [${display_namespace}]"
+
 
    fi
 }

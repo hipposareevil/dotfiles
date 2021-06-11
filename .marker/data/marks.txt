@@ -1,5 +1,4 @@
 git commit --all -m "##commit
-~/weather/getweather.sh##weather
 ssh web@willprogramforfood.com -p 66##wpff
 git show --pretty="format:" --name-only | cat##gitfiles
 perl -le 'print scalar localtime $ARGV[0]' ##epoch
@@ -12,4 +11,8 @@ d run -it -v `pwd`/builddir:/builddir oraclelinux:7.2 sh -c 'rpm -qpil /builddir
 d run -it -v `pwd`:/scratch --workdir /scratch rpmbuilder bash##rpmbuilder
 bash <(docker run iad.ocir.io/odx-oke/oke/infra:latest)##infra
 docker run --entrypoint /bin/sh --rm -v "${HOME}"/.oci/oci_api_key.pem:/Users/sjackson/.oci/oci_api_key.pem -v "${HOME}"/.oci:/root/.oci -it iad.ocir.io/odx-oke/oke/oci-cli:preview##oci
-ssh-add -s /usr/lib/ssh-keychain.dylib##yubi
+m start --memory=10384 --cpus=4##minikube
+source /work/git/dotfiles/hippos/main.sh##dotfiles
+emacs /work/git/dotfiles/hippos/falcon.sh##falcon
+d run -v $PWD:/dktool_repo -it dva-registry.internal.salesforce.com/einstein/dynamic-keytool "-role hawking-foundation.superfunk"##certs
+curl -v --cacert $CA_CERT --key $CLIENT_KEY --cert $CERT $EXTERNAL_AUTH_API_URL##curlcert

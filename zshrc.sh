@@ -4,6 +4,10 @@ drop_dot_dir=$(dirname $0)
 export ZPLUG_HOME=/usr/local/opt/zplug
 source $ZPLUG_HOME/init.zsh
 
+alias h=hippowatch.sh
+
+alias ag="ag --hidden"
+
 
 function git_prompt_info() {
   ref=$(git symbolic-ref HEAD 2> /dev/null) || return
@@ -83,6 +87,7 @@ source $drop_dot_dir/.aliases
 
 ####################
 # MARKS
+# from https://github.com/ohmyzsh/ohmyzsh/blob/master/plugins/jump/jump.plugin.zsh
 export MARKPATH=$HOME/.marks
 function jump() { 
     cd -P "$MARKPATH/$1" 2>/dev/null || echo "No such mark: $1"
@@ -94,7 +99,7 @@ function unmark() {
     /bin/rm -i "$MARKPATH/$1"
 }
 function marks() {
-    \ls -l "$MARKPATH" | tail -n +2 | sed 's/  / /g' | cut -d' ' -f9- | awk -F ' -> ' '{printf "\033[01;36m%10s \033[00m-> \033[1m%s\n", $1, $2}'
+    \ls -l "$MARKPATH" |  tail -n +2 | sed 's/  / /g' | cut -d' ' -f9- |sort -k1 | awk -F ' -> ' '{printf "\033[01;36m%10s \033[00m-> \033[1m%s\n", $1, $2}' 
 }
 
 function _completemarks {
@@ -177,9 +182,9 @@ lsgrep ()
 
 
 # less
-LESSPIPE=`find /usr/local/Cellar | grep src-hilite-lesspipe.sh`
+#LESSPIPE=`find /usr/local/Cellar | grep src-hilite-lesspipe.sh`
 #LESSPIPE=`which src-hilite-lesspipe.sh`
-export LESSOPEN="| ${LESSPIPE} %s"
+#export LESSOPEN="| ${LESSPIPE} %s"
 export LESS=' -R -X -F '
 
 
@@ -191,9 +196,9 @@ source $drop_dot_dir/git.sh
 ######
 # Docker, etc
 
-if [ -e "/work/git/devenv/hippos" ]; then
+if [ -e "/work/git/dotfiles/hippos" ]; then
     # load work files
-    source /work/git/devenv/hippos/main.sh
+    source /work/git/dotfiles/hippos/main.sh
     echo "[Loaded work dot files]"
 else
     source $drop_dot_dir/docker.sh
@@ -205,3 +210,5 @@ else
 fi
 
 source $drop_dot_dir/work.dad.sh
+
+

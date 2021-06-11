@@ -2,6 +2,8 @@ alias dm="docker-machine"
 alias d="docker"
 alias dc="docker-compose"
 
+alias m=minikube
+
 function _d.get.header() {
     d ps | head -1
 }
